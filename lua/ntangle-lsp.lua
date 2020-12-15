@@ -21,6 +21,8 @@ events = {}
 
 document_lookup = {}
 
+local vnamespaces = {}
+
 local outputSections
 
 local getlinenum
@@ -627,7 +629,7 @@ local function attach_to_buf(buf, client_id, language_id)
 	local client = vim.lsp.get_client_by_id(client_id)
 	assert(client, "Could not find client_id")
 	
-	local vnamespace = vim.api.nvim_create_namespace("ntangle-lsp " .. buf)
+	vnamespaces[buf] = vim.api.nvim_create_namespace("ntangle-lsp " .. buf)
 	
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
@@ -969,12 +971,14 @@ local function on_publish_diagnostics(_, _, res, _)
 		error("no refs for " .. uri)
 	end
 	
+	vim.api.nvim_buf_clear_namespace(0, vnamespaces[buf], 0, -1)
+	
 	for _, diag in ipairs(res.diagnostics) do
 		local msg = diag.message
 		
 		local lnum = tonumber(diag.range.start.line)
 		
-		vim.api.nvim_buf_set_virtual_text(buf, 0, refs[lnum+1]-1, {{ msg, "Special" }}, {})
+		vim.api.nvim_buf_set_virtual_text(buf, vnamespaces[buf], refs[lnum+1]-1, {{ msg, "Special" }}, {})
 	end
 	
 end

@@ -686,6 +686,7 @@ client.notify('textDocument/didOpen', params)
 @functions+=
 local function on_publish_diagnostics(_, _, res, _)
 	@get_document_uri_and_refs
+	@clear_diagnostic_virtual_text
 	@for_every_diagnotistic_message_display_virtual_text
 end
 
@@ -721,8 +722,14 @@ local msg = diag.message
 @get_linenumber_of_error+=
 local lnum = tonumber(diag.range.start.line)
 
+@parse_variables+=
+local vnamespaces = {}
+
 @create_virtual_text_namespace_for_buffer+=
-local vnamespace = vim.api.nvim_create_namespace("ntangle-lsp " .. buf)
+vnamespaces[buf] = vim.api.nvim_create_namespace("ntangle-lsp " .. buf)
+
+@clear_diagnostic_virtual_text+=
+vim.api.nvim_buf_clear_namespace(0, vnamespaces[buf], 0, -1)
 
 @add_virtual_text+=
-vim.api.nvim_buf_set_virtual_text(buf, 0, refs[lnum+1]-1, {{ msg, "Special" }}, {})
+vim.api.nvim_buf_set_virtual_text(buf, vnamespaces[buf], refs[lnum+1]-1, {{ msg, "Special" }}, {})
