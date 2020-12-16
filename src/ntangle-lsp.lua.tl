@@ -1,6 +1,6 @@
 @../lua/ntangle-lsp.lua=
 @requires
-@parse_variables
+@script_variables
 @declare_functions
 @functions
 return {
@@ -66,7 +66,7 @@ local section = { linetype = LineType.SECTION, str = name, lines = {}}
 @requires+=
 require("ntangle-lsp.linkedlist")
 
-@parse_variables+=
+@script_variables+=
 local sections = {}
 local curSection = nil
 
@@ -126,7 +126,7 @@ if sections[name] then
 	hasSection = true
 end
 
-@parse_variables+=
+@script_variables+=
 local LineType = {
 	@line_types
 }
@@ -450,7 +450,7 @@ local lines = {}
 @output_generated_header_fake
 local jumpline = collectLines(name, lines, "", curnum)
 
-@parse_variables+=
+@script_variables+=
 local lineRefs = {}
 
 @save_line_reference+=
@@ -488,7 +488,7 @@ end
 @keymap_transpose_buffer+=
 vim.api.nvim_buf_set_keymap(transpose_buf, 'n', '<leader>i', '<cmd>lua navigateTo()<CR>', {noremap = true})
 
-@parse_variables+=
+@script_variables+=
 local nagivationLines = {}
 
 @save_current_buffer+=
@@ -637,7 +637,7 @@ local uri = vim.uri_from_fname(fn)
 local client = vim.lsp.get_client_by_id(client_id)
 assert(client, "Could not find client_id")
 
-@parse_variables+=
+@script_variables+=
 events = {}
 
 @send_new_content_to_lsp_server+=
@@ -684,52 +684,49 @@ local params = {
 client.notify('textDocument/didOpen', params)
 
 @functions+=
-local function on_publish_diagnostics(_, _, res, _)
-	@get_document_uri_and_refs
-	@clear_diagnostic_virtual_text
-	@for_every_diagnotistic_message_display_virtual_text
+local function make_on_publish_diagnostics(buf)
+	@get_uri_of_buffer
+	return function(_, method, params, client_id)
+		@convert_uri_to_tangle_buffer_uri
+		@convert_line_numbers_to_tangle_line_numbers
+		@call_builtin_on_publish_diagnostics_with_modified_params
+	end
 end
 
 @export_symbols+=
-on_publish_diagnostics = on_publish_diagnostics,
+make_on_publish_diagnostics = make_on_publish_diagnostics,
+
+@get_uri_of_buffer+=
+local uri = vim.uri_from_bufnr(buf)
+
+@convert_uri_to_tangle_buffer_uri+=
+local remote_uri = params.uri
+params.uri = uri
 
 @if_has_refs_save_lnum+=
-refs[#refs+1] = line.lnum
+refs[#refs+1] = { string.len(prefix), line.lnum }
 
-@parse_variables+=
-document_lookup = {}
+@script_variables+=
+local document_lookup = {}
 
 @save_document_refs+=
-document_lookup[uri] = { buf, refs }
+document_lookup[uri] = refs
 
-@get_document_uri_and_refs+=
-local uri = res.uri
-local buf, refs = unpack(document_lookup[uri])
-if not refs then
-	error("no refs for " .. uri)
+@convert_line_numbers_to_tangle_line_numbers+=
+local refs = document_lookup[remote_uri]
+for _, diag in ipairs(params.diagnostics) do
+	local lnum_start = diag.range["start"].line
+	local lnum_end = diag.range["end"].line
+
+	local offset_start, new_lnum_start = unpack(refs[lnum_start+1])
+	local offset_end, new_lnum_end = unpack(refs[lnum_end+1])
+
+	diag.range["start"].character = diag.range.start.character - offset_start
+	diag.range["end"].character = diag.range.start.character - offset_end
+
+	diag.range["start"].line = new_lnum_start-1
+	diag.range["end"].line = new_lnum_end-1
 end
 
-@for_every_diagnotistic_message_display_virtual_text+=
-for _, diag in ipairs(res.diagnostics) do
-	@get_message_of_error
-	@get_linenumber_of_error
-	@add_virtual_text
-end
-
-@get_message_of_error+=
-local msg = diag.message
-
-@get_linenumber_of_error+=
-local lnum = tonumber(diag.range.start.line)
-
-@parse_variables+=
-local vnamespaces = {}
-
-@create_virtual_text_namespace_for_buffer+=
-vnamespaces[buf] = vim.api.nvim_create_namespace("ntangle-lsp " .. buf)
-
-@clear_diagnostic_virtual_text+=
-vim.api.nvim_buf_clear_namespace(0, vnamespaces[buf], 0, -1)
-
-@add_virtual_text+=
-vim.api.nvim_buf_set_virtual_text(buf, vnamespaces[buf], refs[lnum+1]-1, {{ msg, "Special" }}, {})
+@call_builtin_on_publish_diagnostics_with_modified_params+=
+vim.lsp.diagnostic.on_publish_diagnostics(_, method, params, client_id)

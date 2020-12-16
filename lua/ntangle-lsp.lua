@@ -19,9 +19,7 @@ local nagivationLines = {}
 
 events = {}
 
-document_lookup = {}
-
-local vnamespaces = {}
+local document_lookup = {}
 
 local outputSections
 
@@ -323,7 +321,7 @@ function outputSections(lines, file, name, prefix, refs)
 		for line in linkedlist.iter(section.lines) do
 			if line.linetype == LineType.TEXT then
 				lines[#lines+1] = prefix .. line.str
-				refs[#refs+1] = line.lnum
+				refs[#refs+1] = { string.len(prefix), line.lnum }
 				
 			end
 			
@@ -629,8 +627,6 @@ local function attach_to_buf(buf, client_id, language_id)
 	local client = vim.lsp.get_client_by_id(client_id)
 	assert(client, "Could not find client_id")
 	
-	vnamespaces[buf] = vim.api.nvim_create_namespace("ntangle-lsp " .. buf)
-	
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
 			local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
@@ -780,7 +776,7 @@ local function attach_to_buf(buf, client_id, language_id)
 					outputSections(lines, file, name, "", refs)
 					local uri = vim.uri_from_fname(fn)
 					
-					document_lookup[uri] = { buf, refs }
+					document_lookup[uri] = refs
 					
 					client.notify("textDocument/didChange", {
 						textDocument = {
@@ -945,7 +941,7 @@ local function attach_to_buf(buf, client_id, language_id)
 				outputSections(lines, file, name, "", refs)
 				local uri = vim.uri_from_fname(fn)
 				
-				document_lookup[uri] = { buf, refs }
+				document_lookup[uri] = refs
 				
 				local params = {
 					textDocument = {
@@ -964,23 +960,30 @@ local function attach_to_buf(buf, client_id, language_id)
 	end)
 end
 
-local function on_publish_diagnostics(_, _, res, _)
-	local uri = res.uri
-	local buf, refs = unpack(document_lookup[uri])
-	if not refs then
-		error("no refs for " .. uri)
-	end
+local function make_on_publish_diagnostics(buf)
+	local uri = vim.uri_from_bufnr(buf)
 	
-	vim.api.nvim_buf_clear_namespace(0, vnamespaces[buf], 0, -1)
-	
-	for _, diag in ipairs(res.diagnostics) do
-		local msg = diag.message
+	return function(_, method, params, client_id)
+		local remote_uri = params.uri
+		params.uri = uri
 		
-		local lnum = tonumber(diag.range.start.line)
+		local refs = document_lookup[remote_uri]
+		for _, diag in ipairs(params.diagnostics) do
+			local lnum_start = diag.range["start"].line
+			local lnum_end = diag.range["end"].line
 		
-		vim.api.nvim_buf_set_virtual_text(buf, vnamespaces[buf], refs[lnum+1]-1, {{ msg, "Special" }}, {})
+			local offset_start, new_lnum_start = unpack(refs[lnum_start+1])
+			local offset_end, new_lnum_end = unpack(refs[lnum_end+1])
+		
+			diag.range["start"].character = diag.range.start.character - offset_start
+			diag.range["end"].character = diag.range.start.character - offset_end
+		
+			diag.range["start"].line = new_lnum_start-1
+			diag.range["end"].line = new_lnum_end-1
+		end
+		
+		vim.lsp.diagnostic.on_publish_diagnostics(_, method, params, client_id)
 	end
-	
 end
 
 return {
@@ -994,7 +997,7 @@ getRootFilename = getRootFilename,
 
 attach_to_buf = attach_to_buf,
 
-on_publish_diagnostics = on_publish_diagnostics,
+make_on_publish_diagnostics = make_on_publish_diagnostics,
 
 }
 
