@@ -14,6 +14,7 @@ Install using a plugin manager such as [vim-plug](https://github.com/junegunn/vi
 Plug 'jbyuki/ntangle-lsp.nvim'
 ```
 
+
 Test Script
 -----------
 
@@ -24,19 +25,42 @@ Note: This is just a test script. Please don't judge its quality.
 
 ```lua
 local bufnr = 1
-
 vim.schedule(function()
 local client_id = vim.lsp.start_client {
 	cmd = { "clangd" },
 	root_dir = ".",
 	handlers = {
-		["textDocument/publishDiagnostics"] = require("ntangle-lsp").on_publish_diagnostics,
+		["textDocument/publishDiagnostics"] = require("ntangle-lsp").make_on_publish_diagnostics(bufnr),
 	},
 }
-print(vim.inspect(require("ntangle-lsp").on_publish_diagnostics))
 
 vim.wait(500)
 vim.lsp.set_log_level("debug")
 require("ntangle-lsp").attach_to_buf(bufnr, client_id, "cpp")
 end)
 ```
+
+Custom Handlers
+---------------
+
+* [ ] callHierarchy/incomingCalls
+* [ ] callHierarchy/outgoingCalls
+* [ ] textDocument/codeAction
+* [ ] textDocument/completion
+* [ ] textDocument/declaration
+* [ ] textDocument/definition
+* [ ] textDocument/documentHighlight
+* [ ] textDocument/documentSymbol
+* [ ] textDocument/formatting
+* [ ] textDocument/hover
+* [ ] textDocument/implementation
+* [x] textDocument/publishDiagnostics
+* [ ] textDocument/rangeFormatting
+* [ ] textDocument/references
+* [ ] textDocument/rename
+* [ ] textDocument/signatureHelp
+* [ ] textDocument/typeDefinition
+* [ ] window/logMessage
+* [ ] window/showMessage
+* [ ] workspace/applyEdit
+* [ ] workspace/symbol
