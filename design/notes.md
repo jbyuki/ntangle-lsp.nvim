@@ -1,34 +1,12 @@
-Transpilation
--------------
+Notes
+-----
 
-Strong: typescript, dart, coffescript,...
-Weak: ntangle
+Implementation
+--------------
 
-Weak: reordering, duplication, removal
-Strong: reordering, duplication, removal, replace with other
+* As much as possible, it should use builtin facilities to leverage LSP tasks
 
-Diagram
--------
+Observations
+------------
 
-Normal LSP:
-
-text edits
-    |
-	v
-LSP client
-    |
-	v
-LSP server
-
-LSP coupled with ntangle:
-
-text edits
-    |
-	v
-ntangle translation
-    |
-	v
-LSP client
-    |
-	v
-LSP server
+* One source location (one line in ntangle source file) can map to several target location (in generated file). This needs to be resolved to handle functionnalities such as search for definition or any client requests really. One solution could be to present the user with a popup where he could choose which target line he want to request.

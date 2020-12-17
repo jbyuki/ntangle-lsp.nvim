@@ -34,6 +34,9 @@ local client_id = vim.lsp.start_client {
 	},
 }
 
+require("ntangle-lsp").register_client(bufnr, client_id)
+
+vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
 vim.wait(500)
 vim.lsp.set_log_level("debug")
 require("ntangle-lsp").attach_to_buf(bufnr, client_id, "cpp")
@@ -52,7 +55,7 @@ Custom Handlers
 * [ ] textDocument/documentHighlight
 * [ ] textDocument/documentSymbol
 * [ ] textDocument/formatting
-* [ ] textDocument/hover
+* [x] textDocument/hover
 * [ ] textDocument/implementation
 * [x] textDocument/publishDiagnostics
 * [ ] textDocument/rangeFormatting

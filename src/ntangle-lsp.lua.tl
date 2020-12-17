@@ -623,8 +623,8 @@ for name, section in pairs(sections) do
 		local lines = {}
 		local refs = {}
 		@output_generated_header
-		outputSections(lines, file, name, "", refs)
 		@get_text_document_uri
+		outputSections(lines, file, name, "", refs)
 		@save_document_refs
 		@send_new_content_to_lsp_server
 	end
@@ -730,3 +730,81 @@ end
 
 @call_builtin_on_publish_diagnostics_with_modified_params+=
 vim.lsp.diagnostic.on_publish_diagnostics(_, method, params, client_id)
+
+@export_symbols+=
+document_lookup = document_lookup,
+
+@script_variables+=
+local buffer_lookup = {} -- reverse lookup of document_lookup
+
+@clear_sections+=
+buffer_lookup = {}
+
+@if_has_refs_save_lnum+=
+-- Note: actually there can be multiple source location 
+-- which map to target different location. In the future
+-- there would need
+buffer_lookup[line.lnum] = buffer_lookup[line.lnum] or {}
+table.insert(buffer_lookup[line.lnum], { string.len(prefix), refs, #refs }) -- only saves refs table reference
+
+@functions+=
+local function get_buffer_lookup() 
+	return buffer_lookup
+end
+
+@export_symbols+=
+get_buffer_lookup = get_buffer_lookup,
+
+@script_variables+=
+local active_clients = {}
+
+@functions+=
+local function register_client(buf, client_id)
+	active_clients[buf] = client_id
+end
+
+@export_symbols+=
+register_client = register_client,
+
+@declare_functions+=
+local buf_request
+
+@functions+=
+function buf_request(buf, method, params, handler)
+	@get_client_from_buf
+	@send_client_method
+end
+
+@get_client_from_buf+=
+local client_id = active_clients[buf]
+local client = vim.lsp.get_client_by_id(client_id)
+
+@send_client_method+=
+if client.supports_method(method) then
+	client.request(method, params, nil, buf)
+end
+
+@functions+=
+local function hover()
+	local params = require("ntangle-lsp.util").make_position_params()
+	table.insert(events, params)
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/hover', params)
+end
+
+@export_symbols+=
+hover = hover,
+
+@functions+=
+local function make_on_hover(buf)
+	@get_uri_of_buffer
+	return function(...)
+		table.insert(events, {...})
+		-- @convert_uri_to_tangle_buffer_uri
+		-- @convert_line_numbers_to_tangle_line_numbers
+		-- @call_builtin_on_publish_diagnostics_with_modified_params
+	end
+end
+
+@export_symbols+=
+make_on_hover = make_on_hover,

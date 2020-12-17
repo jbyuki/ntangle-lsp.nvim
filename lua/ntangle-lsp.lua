@@ -21,6 +21,10 @@ events = {}
 
 local document_lookup = {}
 
+local buffer_lookup = {} -- reverse lookup of document_lookup
+
+local active_clients = {}
+
 local outputSections
 
 local getlinenum
@@ -29,11 +33,15 @@ local toluapat
 
 local collectLines
 
+local buf_request
+
 local function tangle(filename)
 	sections = {}
 	curSection = nil
 	
 	lineRefs = {}
+	
+	buffer_lookup = {}
 	
 	if filename then
 		lnum = 1
@@ -323,6 +331,12 @@ function outputSections(lines, file, name, prefix, refs)
 				lines[#lines+1] = prefix .. line.str
 				refs[#refs+1] = { string.len(prefix), line.lnum }
 				
+				-- Note: actually there can be multiple source location 
+				-- which map to target different location. In the future
+				-- there would need
+				buffer_lookup[line.lnum] = buffer_lookup[line.lnum] or {}
+				table.insert(buffer_lookup[line.lnum], { string.len(prefix), refs, #refs }) -- only saves refs table reference
+				
 			end
 			
 			if line.linetype == LineType.REFERENCE then
@@ -338,6 +352,8 @@ local function goto(filename, linenum, root_pattern)
 	curSection = nil
 	
 	lineRefs = {}
+	
+	buffer_lookup = {}
 	
 	lnum = 1
 	for line in io.lines(filename) do
@@ -511,6 +527,8 @@ local function collectSection()
 	
 	lineRefs = {}
 	
+	buffer_lookup = {}
+	
 	local lines = vim.api.nvim_buf_get_lines(0, 0, -1, true)
 	
 	local curnum = vim.api.nvim_call_function("line", {"."})
@@ -635,6 +653,8 @@ local function attach_to_buf(buf, client_id, language_id)
 			curSection = nil
 			
 			lineRefs = {}
+			
+			buffer_lookup = {}
 			
 			lnum = 1
 			for _,line in ipairs(lines) do
@@ -773,9 +793,9 @@ local function attach_to_buf(buf, client_id, language_id)
 						table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
 					end
 					
-					outputSections(lines, file, name, "", refs)
 					local uri = vim.uri_from_fname(fn)
 					
+					outputSections(lines, file, name, "", refs)
 					document_lookup[uri] = refs
 					
 					client.notify("textDocument/didChange", {
@@ -800,6 +820,8 @@ local function attach_to_buf(buf, client_id, language_id)
 		curSection = nil
 		
 		lineRefs = {}
+		
+		buffer_lookup = {}
 		
 		lnum = 1
 		for _,line in ipairs(lines) do
@@ -983,6 +1005,43 @@ local function make_on_publish_diagnostics(buf)
 		end
 		
 		vim.lsp.diagnostic.on_publish_diagnostics(_, method, params, client_id)
+		
+	end
+end
+
+local function get_buffer_lookup() 
+	return buffer_lookup
+end
+
+local function register_client(buf, client_id)
+	active_clients[buf] = client_id
+end
+
+function buf_request(buf, method, params, handler)
+	local client_id = active_clients[buf]
+	local client = vim.lsp.get_client_by_id(client_id)
+	
+	if client.supports_method(method) then
+		client.request(method, params, nil, buf)
+	end
+	
+end
+
+local function hover()
+	local params = require("ntangle-lsp.util").make_position_params()
+	table.insert(events, params)
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/hover', params)
+end
+
+local function make_on_hover(buf)
+	local uri = vim.uri_from_bufnr(buf)
+	
+	return function(...)
+		table.insert(events, {...})
+		-- @convert_uri_to_tangle_buffer_uri
+		-- @convert_line_numbers_to_tangle_line_numbers
+		-- @call_builtin_on_publish_diagnostics_with_modified_params
 	end
 end
 
@@ -999,5 +1058,14 @@ attach_to_buf = attach_to_buf,
 
 make_on_publish_diagnostics = make_on_publish_diagnostics,
 
+document_lookup = document_lookup,
+
+get_buffer_lookup = get_buffer_lookup,
+
+register_client = register_client,
+
+hover = hover,
+
+make_on_hover = make_on_hover,
 }
 
