@@ -1033,17 +1033,6 @@ local function hover()
 	buf_request(buf, 'textDocument/hover', params)
 end
 
-local function make_on_definition(buf)
-	local uri = string.lower(vim.uri_from_bufnr(buf))
-	
-	return function(...)
-		table.insert(events, {...})
-		-- @convert_uri_to_tangle_buffer_uri
-		-- @convert_line_numbers_to_tangle_line_numbers
-		-- @call_builtin_on_publish_diagnostics_with_modified_params
-	end
-end
-
 local function definition()
 	local params = require("ntangle-lsp.util").make_position_params()
 	local buf = vim.api.nvim_get_current_buf()
@@ -1084,7 +1073,26 @@ local function make_location_handler(buf)
 			vim.api.nvim_command("copen")
 			vim.api.nvim_command("wincmd p")
 		end
+		
 	end
+end
+
+local function declaration()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/declaration', params)
+end
+
+local function type_definition()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/typeDefinition', params)
+end
+
+local function implementation()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/implementation', params)
 end
 
 return {
@@ -1108,10 +1116,27 @@ register_client = register_client,
 
 hover = hover,
 
-make_on_definition = make_on_definition,
+-- @functions+=
+-- local function make_on_definition(buf)
+-- 	@get_uri_of_buffer
+-- 	return function(...)
+-- 		table.insert(events, {...})
+-- 		-- @convert_uri_to_tangle_buffer_uri
+-- 		-- @convert_line_numbers_to_tangle_line_numbers
+-- 		-- @call_builtin_on_publish_diagnostics_with_modified_params
+-- 	end
+-- end
+-- 
+-- @export_symbols+=
+-- make_on_definition = make_on_definition,
 
 definition = definition,
 make_location_handler = make_location_handler,
 
+declaration = declaration,
+
+type_definition = type_definition,
+
+implementation = implementation,
 }
 

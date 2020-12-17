@@ -794,19 +794,19 @@ end
 @export_symbols+=
 hover = hover,
 
-@functions+=
-local function make_on_definition(buf)
-	@get_uri_of_buffer
-	return function(...)
-		table.insert(events, {...})
-		-- @convert_uri_to_tangle_buffer_uri
-		-- @convert_line_numbers_to_tangle_line_numbers
-		-- @call_builtin_on_publish_diagnostics_with_modified_params
-	end
-end
-
-@export_symbols+=
-make_on_definition = make_on_definition,
+-- @functions+=
+-- local function make_on_definition(buf)
+-- 	@get_uri_of_buffer
+-- 	return function(...)
+-- 		table.insert(events, {...})
+-- 		-- @convert_uri_to_tangle_buffer_uri
+-- 		-- @convert_line_numbers_to_tangle_line_numbers
+-- 		-- @call_builtin_on_publish_diagnostics_with_modified_params
+-- 	end
+-- end
+-- 
+-- @export_symbols+=
+-- make_on_definition = make_on_definition,
 
 @functions+=
 local function definition()
@@ -860,3 +860,33 @@ if #result > 1 then
 	vim.api.nvim_command("copen")
 	vim.api.nvim_command("wincmd p")
 end
+
+@functions+=
+local function declaration()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/declaration', params)
+end
+
+@export_symbols+=
+declaration = declaration,
+
+@functions+=
+local function type_definition()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/typeDefinition', params)
+end
+
+@export_symbols+=
+type_definition = type_definition,
+
+@functions+=
+local function implementation()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/implementation', params)
+end
+
+@export_symbols+=
+implementation = implementation,

@@ -50,19 +50,19 @@ Custom Handlers
 * [ ] callHierarchy/outgoingCalls
 * [ ] textDocument/codeAction
 * [ ] textDocument/completion
-* [ ] textDocument/declaration
-* [ ] textDocument/definition
+* [x] textDocument/declaration
+* [x] textDocument/definition
 * [ ] textDocument/documentHighlight
 * [ ] textDocument/documentSymbol
 * [ ] textDocument/formatting
 * [x] textDocument/hover
-* [ ] textDocument/implementation
+* [x] textDocument/implementation
 * [x] textDocument/publishDiagnostics
 * [ ] textDocument/rangeFormatting
 * [ ] textDocument/references
 * [ ] textDocument/rename
 * [ ] textDocument/signatureHelp
-* [ ] textDocument/typeDefinition
+* [x] textDocument/typeDefinition
 * [ ] window/logMessage
 * [ ] window/showMessage
 * [ ] workspace/applyEdit
