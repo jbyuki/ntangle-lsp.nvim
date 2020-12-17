@@ -793,7 +793,7 @@ local function attach_to_buf(buf, client_id, language_id)
 						table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
 					end
 					
-					local uri = vim.uri_from_fname(fn)
+					local uri = string.lower(vim.uri_from_fname(fn))
 					
 					outputSections(lines, file, name, "", refs)
 					document_lookup[uri] = refs
@@ -961,7 +961,7 @@ local function attach_to_buf(buf, client_id, language_id)
 				end
 				
 				outputSections(lines, file, name, "", refs)
-				local uri = vim.uri_from_fname(fn)
+				local uri = string.lower(vim.uri_from_fname(fn))
 				
 				document_lookup[uri] = refs
 				
@@ -983,7 +983,7 @@ local function attach_to_buf(buf, client_id, language_id)
 end
 
 local function make_on_publish_diagnostics(buf)
-	local uri = vim.uri_from_bufnr(buf)
+	local uri = string.lower(vim.uri_from_bufnr(buf))
 	
 	return function(_, method, params, client_id)
 		local remote_uri = params.uri
@@ -997,8 +997,8 @@ local function make_on_publish_diagnostics(buf)
 			local offset_start, new_lnum_start = unpack(refs[lnum_start+1])
 			local offset_end, new_lnum_end = unpack(refs[lnum_end+1])
 		
-			diag.range["start"].character = diag.range.start.character - offset_start
-			diag.range["end"].character = diag.range.start.character - offset_end
+			diag.range["start"].character = diag.range["start"].character - offset_start
+			diag.range["end"].character = diag.range["end"].character - offset_end
 		
 			diag.range["start"].line = new_lnum_start-1
 			diag.range["end"].line = new_lnum_end-1
@@ -1029,19 +1029,61 @@ end
 
 local function hover()
 	local params = require("ntangle-lsp.util").make_position_params()
-	table.insert(events, params)
 	local buf = vim.api.nvim_get_current_buf()
 	buf_request(buf, 'textDocument/hover', params)
 end
 
-local function make_on_hover(buf)
-	local uri = vim.uri_from_bufnr(buf)
+local function make_on_definition(buf)
+	local uri = string.lower(vim.uri_from_bufnr(buf))
 	
 	return function(...)
 		table.insert(events, {...})
 		-- @convert_uri_to_tangle_buffer_uri
 		-- @convert_line_numbers_to_tangle_line_numbers
 		-- @call_builtin_on_publish_diagnostics_with_modified_params
+	end
+end
+
+local function definition()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/definition', params)
+end
+
+local function make_location_handler(buf)
+	local uri = string.lower(vim.uri_from_bufnr(buf))
+	
+	return function(_, method, result)
+		local converted = {}
+		if not vim.tbl_islist(result) then result = { result } end
+
+		for _, r in ipairs(result) do
+			local remote_uri = string.lower(r.uri)
+			local refs = document_lookup[remote_uri]
+			table.insert(events, remote_uri)
+			table.insert(events, document_lookup)
+			
+			local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
+			local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
+			
+			r.range["start"].character = r.range["start"].character - offset_start
+			r.range["end"].character = r.range["end"].character - offset_end
+			
+			r.range["start"].line = new_lnum_start-1
+			r.range["end"].line = new_lnum_end-1
+			
+			r.uri = uri
+			
+		end
+
+		table.insert(events, vim.inspect(result))
+		vim.lsp.util.jump_to_location(result[1])
+		
+		if #result > 1 then
+			vim.lsp.util.set_qflist(vim.lsp.util.locations_to_items(result))
+			vim.api.nvim_command("copen")
+			vim.api.nvim_command("wincmd p")
+		end
 	end
 end
 
@@ -1066,6 +1108,10 @@ register_client = register_client,
 
 hover = hover,
 
-make_on_hover = make_on_hover,
+make_on_definition = make_on_definition,
+
+definition = definition,
+make_location_handler = make_location_handler,
+
 }
 
