@@ -1047,22 +1047,22 @@ local function make_location_handler(buf)
 		if not vim.tbl_islist(result) then result = { result } end
 
 		for _, r in ipairs(result) do
-			local remote_uri = string.lower(r.uri)
-			local refs = document_lookup[remote_uri]
-			table.insert(events, remote_uri)
-			table.insert(events, document_lookup)
-			
-			local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
-			local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
-			
-			r.range["start"].character = r.range["start"].character - offset_start
-			r.range["end"].character = r.range["end"].character - offset_end
-			
-			r.range["start"].line = new_lnum_start-1
-			r.range["end"].line = new_lnum_end-1
-			
-			r.uri = uri
-			
+			if document_lookup[remote_uri] then
+				local remote_uri = string.lower(r.uri)
+				local refs = document_lookup[remote_uri]
+				
+				local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
+				local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
+				
+				r.range["start"].character = r.range["start"].character - offset_start
+				r.range["end"].character = r.range["end"].character - offset_end
+				
+				r.range["start"].line = new_lnum_start-1
+				r.range["end"].line = new_lnum_end-1
+				
+				r.uri = uri
+				
+			end
 		end
 
 		table.insert(events, vim.inspect(result))
@@ -1098,6 +1098,7 @@ end
 local function start(lang)
 	if not lang or lang == "cpp" then
 		vim.schedule(function()
+		vim.lsp.set_log_level("debug")
 		local bufnr = vim.fn.bufnr(0)
 		
 		local root_dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p:h")

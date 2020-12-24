@@ -826,7 +826,9 @@ local function make_location_handler(buf)
 		if not vim.tbl_islist(result) then result = { result } end
 
 		for _, r in ipairs(result) do
-			@convert_uri_and_location
+			if document_lookup[remote_uri] then
+				@convert_uri_and_location
+			end
 		end
 
 		@call_builtin_on_location_handler_with_modified_params
@@ -836,8 +838,6 @@ end
 @convert_uri_and_location+=
 local remote_uri = string.lower(r.uri)
 local refs = document_lookup[remote_uri]
-table.insert(events, remote_uri)
-table.insert(events, document_lookup)
 
 local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
 local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
@@ -895,6 +895,7 @@ implementation = implementation,
 local function start(lang)
 	if not lang or lang == "cpp" then
 		vim.schedule(function()
+		vim.lsp.set_log_level("debug")
 		@get_current_buffer_number
 		@get_current_buffer_root_dir
 		@create_lsp_client_with_clangd
