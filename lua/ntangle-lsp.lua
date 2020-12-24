@@ -796,7 +796,7 @@ local function attach_to_buf(buf, client_id, language_id)
 					local uri = string.lower(vim.uri_from_fname(fn))
 					
 					outputSections(lines, file, name, "", refs)
-					document_lookup[uri] = refs
+					document_lookup[uri] = {buf, refs}
 					
 					client.notify("textDocument/didChange", {
 						textDocument = {
@@ -963,7 +963,7 @@ local function attach_to_buf(buf, client_id, language_id)
 				outputSections(lines, file, name, "", refs)
 				local uri = string.lower(vim.uri_from_fname(fn))
 				
-				document_lookup[uri] = refs
+				document_lookup[uri] = {buf, refs}
 				
 				local params = {
 					textDocument = {
@@ -989,7 +989,7 @@ local function make_on_publish_diagnostics(buf)
 		local remote_uri = params.uri
 		params.uri = uri
 		
-		local refs = document_lookup[remote_uri]
+		local _, refs = unpack(document_lookup[remote_uri])
 		for _, diag in ipairs(params.diagnostics) do
 			local lnum_start = diag.range["start"].line
 			local lnum_end = diag.range["end"].line
@@ -1047,9 +1047,11 @@ local function make_location_handler(buf)
 		if not vim.tbl_islist(result) then result = { result } end
 
 		for _, r in ipairs(result) do
-			if document_lookup[remote_uri] then
+			if document_lookup[string.lower(r.uri)] then
 				local remote_uri = string.lower(r.uri)
-				local refs = document_lookup[remote_uri]
+				local buf, refs = unpack(document_lookup[remote_uri])
+				table.insert(events, refs)
+				table.insert(events, document_lookup[remote_uri])
 				
 				local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
 				local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
@@ -1060,7 +1062,7 @@ local function make_location_handler(buf)
 				r.range["start"].line = new_lnum_start-1
 				r.range["end"].line = new_lnum_end-1
 				
-				r.uri = uri
+				r.uri = vim.uri_from_bufnr(buf)
 				
 			end
 		end

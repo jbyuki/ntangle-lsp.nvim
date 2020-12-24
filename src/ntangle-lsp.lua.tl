@@ -709,10 +709,10 @@ refs[#refs+1] = { string.len(prefix), line.lnum }
 local document_lookup = {}
 
 @save_document_refs+=
-document_lookup[uri] = refs
+document_lookup[uri] = {buf, refs}
 
 @convert_line_numbers_to_tangle_line_numbers+=
-local refs = document_lookup[remote_uri]
+local _, refs = unpack(document_lookup[remote_uri])
 for _, diag in ipairs(params.diagnostics) do
 	local lnum_start = diag.range["start"].line
 	local lnum_end = diag.range["end"].line
@@ -826,7 +826,7 @@ local function make_location_handler(buf)
 		if not vim.tbl_islist(result) then result = { result } end
 
 		for _, r in ipairs(result) do
-			if document_lookup[remote_uri] then
+			if document_lookup[string.lower(r.uri)] then
 				@convert_uri_and_location
 			end
 		end
@@ -837,7 +837,9 @@ end
 
 @convert_uri_and_location+=
 local remote_uri = string.lower(r.uri)
-local refs = document_lookup[remote_uri]
+local buf, refs = unpack(document_lookup[remote_uri])
+table.insert(events, refs)
+table.insert(events, document_lookup[remote_uri])
 
 local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
 local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
@@ -848,7 +850,7 @@ r.range["end"].character = r.range["end"].character - offset_end
 r.range["start"].line = new_lnum_start-1
 r.range["end"].line = new_lnum_end-1
 
-r.uri = uri
+r.uri = vim.uri_from_bufnr(buf)
 
 @call_builtin_on_location_handler_with_modified_params+=
 table.insert(events, vim.inspect(result))

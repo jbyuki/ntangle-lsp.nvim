@@ -35,7 +35,8 @@ col = vim.str_utfindex(line, col) + prefix_len
 
 @get_corresponding_uri+=
 local section_uri
-for uri, document_refs in pairs(require("ntangle-lsp").document_lookup) do
+for uri, doc in pairs(require("ntangle-lsp").document_lookup) do
+	local _, document_refs = unpack(doc)
 	if refs == document_refs then
 		section_uri = uri
 	end
