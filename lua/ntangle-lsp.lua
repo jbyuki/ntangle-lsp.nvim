@@ -1095,6 +1095,38 @@ local function implementation()
 	buf_request(buf, 'textDocument/implementation', params)
 end
 
+local function start(lang)
+	if not lang or lang == "cpp" then
+		vim.schedule(function()
+		local bufnr = vim.fn.bufnr(0)
+		
+		local root_dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p:h")
+		
+		local client_id = vim.lsp.start_client {
+			cmd = { "clangd" },
+			root_dir = root_dir,
+			handlers = {
+				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(bufnr),
+				["textDocument/definition"] = make_location_handler(bufnr),
+				["textDocument/declaration"] = make_location_handler(bufnr),
+				["textDocument/typeDefinition"] = make_location_handler(bufnr),
+				["textDocument/implementation"] = make_location_handler(bufnr),
+			},
+		}
+		
+		vim.wait(500)
+		print("LSP starting...")
+		
+		register_client(bufnr, client_id)
+		vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
+		vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
+		
+		attach_to_buf(bufnr, client_id, "cpp")
+		
+		end)
+	end
+end
+
 return {
 tangle = tangle,
 
@@ -1138,5 +1170,9 @@ declaration = declaration,
 type_definition = type_definition,
 
 implementation = implementation,
+
+
+start = start,
+
 }
 

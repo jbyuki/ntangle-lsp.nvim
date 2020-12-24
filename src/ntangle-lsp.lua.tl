@@ -590,7 +590,6 @@ attach_to_buf = attach_to_buf,
 @functions+=
 local function attach_to_buf(buf, client_id, language_id)
 	@get_client_from_id
-	@create_virtual_text_namespace_for_buffer
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
 			@get_lines_from_buffer
@@ -890,3 +889,55 @@ end
 
 @export_symbols+=
 implementation = implementation,
+
+
+@functions+=
+local function start(lang)
+	if not lang or lang == "cpp" then
+		vim.schedule(function()
+		@get_current_buffer_number
+		@get_current_buffer_root_dir
+		@create_lsp_client_with_clangd
+		@wait_some_time
+		@register_client
+		@define_some_general_keybindings
+		@attach_ntangle_lsp_to_buf
+		end)
+	end
+end
+
+@export_symbols+=
+start = start,
+
+@get_current_buffer_root_dir+=
+local root_dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p:h")
+
+@get_current_buffer_number+=
+local bufnr = vim.fn.bufnr(0)
+
+@create_lsp_client_with_clangd+=
+local client_id = vim.lsp.start_client {
+	cmd = { "clangd" },
+	root_dir = root_dir,
+	handlers = {
+		["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(bufnr),
+		["textDocument/definition"] = make_location_handler(bufnr),
+		["textDocument/declaration"] = make_location_handler(bufnr),
+		["textDocument/typeDefinition"] = make_location_handler(bufnr),
+		["textDocument/implementation"] = make_location_handler(bufnr),
+	},
+}
+
+@wait_some_time+=
+vim.wait(500)
+print("LSP starting...")
+
+@define_some_general_keybindings+=
+vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
+vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
+
+@attach_ntangle_lsp_to_buf+=
+attach_to_buf(bufnr, client_id, "cpp")
+
+@register_client+=
+register_client(bufnr, client_id)
