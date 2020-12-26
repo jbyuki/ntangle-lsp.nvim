@@ -811,6 +811,21 @@ local function attach_to_buf(buf, client_id, language_id)
 				end
 			end
 			
+			-- Very! important to put in vim.schedule.
+			-- The cursor moves after on_lines event
+			-- thus we defer the signature help function
+			vim.schedule(function()
+				if new_lastline - firstline == 1 then
+					local curline = lines[firstline+1]
+					local linelen = string.len(curline)
+					local lastchar = string.sub(curline, linelen, linelen)
+					if lastchar == "(" or lastchar == "," then
+						local params = require("ntangle-lsp.util").make_position_params()
+						local buf = vim.api.nvim_get_current_buf()
+						buf_request(buf, 'textDocument/signatureHelp', params)
+					end
+				end
+			end)
 		end
 	})
 	vim.schedule(function()
@@ -1050,8 +1065,6 @@ local function make_location_handler(buf)
 			if document_lookup[string.lower(r.uri)] then
 				local remote_uri = string.lower(r.uri)
 				local buf, refs = unpack(document_lookup[remote_uri])
-				table.insert(events, refs)
-				table.insert(events, document_lookup[remote_uri])
 				
 				local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
 				local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
@@ -1067,7 +1080,6 @@ local function make_location_handler(buf)
 			end
 		end
 
-		table.insert(events, vim.inspect(result))
 		vim.lsp.util.jump_to_location(result[1])
 		
 		if #result > 1 then
@@ -1121,6 +1133,7 @@ local function start(lang)
 		print("LSP starting...")
 		
 		register_client(bufnr, client_id)
+		
 		vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
 		vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
 		

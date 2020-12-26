@@ -596,6 +596,7 @@ local function attach_to_buf(buf, client_id, language_id)
 			@clear_sections
 			@parse_tangle_lines
 			@for_every_root_node_send_content_to_lsp_server
+			@if_paren_send_signature_help
 		end
 	})
 	vim.schedule(function()
@@ -838,8 +839,6 @@ end
 @convert_uri_and_location+=
 local remote_uri = string.lower(r.uri)
 local buf, refs = unpack(document_lookup[remote_uri])
-table.insert(events, refs)
-table.insert(events, document_lookup[remote_uri])
 
 local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
 local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
@@ -853,7 +852,6 @@ r.range["end"].line = new_lnum_end-1
 r.uri = vim.uri_from_bufnr(buf)
 
 @call_builtin_on_location_handler_with_modified_params+=
-table.insert(events, vim.inspect(result))
 vim.lsp.util.jump_to_location(result[1])
 
 if #result > 1 then
@@ -944,3 +942,20 @@ attach_to_buf(bufnr, client_id, "cpp")
 
 @register_client+=
 register_client(bufnr, client_id)
+
+@if_paren_send_signature_help+=
+-- Very! important to put in vim.schedule.
+-- The cursor moves after on_lines event
+-- thus we defer the signature help function
+vim.schedule(function()
+	if new_lastline - firstline == 1 then
+		local curline = lines[firstline+1]
+		local linelen = string.len(curline)
+		local lastchar = string.sub(curline, linelen, linelen)
+		if lastchar == "(" or lastchar == "," then
+			local params = require("ntangle-lsp.util").make_position_params()
+			local buf = vim.api.nvim_get_current_buf()
+			buf_request(buf, 'textDocument/signatureHelp', params)
+		end
+	end
+end)
