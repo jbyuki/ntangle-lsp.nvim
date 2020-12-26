@@ -16,15 +16,66 @@ local function make_position_params()
 			section_uri = uri
 		end
 	end
+	
 	return { 
 		textDocument = {uri = section_uri},
 		position = {line = lnum, character = col},
 	}
 end
 
+local function search_symbol(query)
+	local params = {query = query}
+	local results_lsp = require("ntangle-lsp").buf_request_sync(vim.fn.bufnr("%"), "workspace/symbol", params)
+	
+	if results_lsp then
+		local qflist = {}
+		for _, symbol in ipairs(results_lsp) do
+			local range = symbol.location.range
+			local uri = string.lower(symbol.location.uri)
+			local document_lookup = require"ntangle-lsp".document_lookup
+			local kind = vim.lsp.util._get_symbol_kind_name(symbol.kind)
+		
+			if document_lookup[uri] then
+				local buf, refs = unpack(document_lookup[symbol.location.uri])
+				local offset_start, new_lnum_start = unpack(refs[range.start.line+1])
+				local lnum = new_lnum_start+1
+				local col = range.start.character + 1 - offset_start
+				local filename = vim.api.nvim_buf_get_name(buf)
+				
+				table.insert(qflist, {
+					filename = filename,
+					lnum = lnum,
+					col = col,
+					kind = kind,
+					text = '['..kind..'] '..symbol.name
+				})
+				
+			else
+				local filename = vim.uri_to_fname(uri)
+				local lnum = range.start.line + 1
+				local col = range.start.character + 1
+				table.insert(qflist, {
+					filename = filename,
+					lnum = lnum,
+					col = col,
+					kind = kind,
+					text = '['..kind..'] '..symbol.name
+				})
+				
+			end
+		end
+		
+		vim.fn.setqflist(qflist)
+		
+	end
+	vim.api.nvim_command("copen")
+end
+
 
 return {
 	make_position_params = make_position_params,
+	
+	search_symbol = search_symbol,
 	
 }
 

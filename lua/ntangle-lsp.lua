@@ -826,6 +826,10 @@ local function attach_to_buf(buf, client_id, language_id)
 					end
 				end
 			end)
+			
+			-- @define_some_general_keybindings+=
+			-- vim.api.nvim_buf_set_keymap(bufnr, 'i', '<tab>', '<cmd>lua require("ntangle-lsp").completion()<CR>', {noremap = true})
+			
 		end
 	})
 	vim.schedule(function()
@@ -1037,7 +1041,7 @@ function buf_request(buf, method, params, handler)
 	local client = vim.lsp.get_client_by_id(client_id)
 	
 	if client.supports_method(method) then
-		client.request(method, params, nil, buf)
+		client.request(method, params, handler, buf)
 	end
 	
 end
@@ -1143,6 +1147,36 @@ local function start(lang)
 	end
 end
 
+local function completion()
+	local params = require("ntangle-lsp.util").make_position_params()
+	local buf = vim.api.nvim_get_current_buf()
+	buf_request(buf, 'textDocument/completion', params)
+end
+
+local function buf_request_sync(buf, method, params)
+	local client_id = active_clients[buf]
+	local client = vim.lsp.get_client_by_id(client_id)
+	
+	local returned_result
+	local function handler(err, _, result, client_id)
+		returned_result = result
+	end
+	
+	if client.supports_method(method) then
+		client.request(method, params, handler, buf)
+	end
+	
+	local it = 0
+	local it_max = 100
+	
+	while not returned_result and it < it_max do
+		vim.wait(100)
+		it = it + 1
+	end
+	
+	return returned_result
+end
+
 return {
 tangle = tangle,
 
@@ -1189,6 +1223,10 @@ implementation = implementation,
 
 
 start = start,
+
+completion = completion,
+
+buf_request_sync = buf_request_sync,
 
 }
 

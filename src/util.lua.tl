@@ -1,8 +1,5 @@
 @../lua/ntangle-lsp/util.lua=
-@requires
-@script_variables
 
-@declare_functions
 @functions
 
 return {
@@ -41,3 +38,61 @@ for uri, doc in pairs(require("ntangle-lsp").document_lookup) do
 		section_uri = uri
 	end
 end
+
+@functions+=
+local function search_symbol(query)
+	@do_lsp_search_query
+	if results_lsp then
+		@convert_symbols_to_qflist_and_unntangle
+		@put_results_in_quickfix
+	end
+	@open_quickfix
+end
+
+@export_symbols+=
+search_symbol = search_symbol,
+
+@do_lsp_search_query+=
+local params = {query = query}
+local results_lsp = require("ntangle-lsp").buf_request_sync(vim.fn.bufnr("%"), "workspace/symbol", params)
+
+@convert_symbols_to_qflist_and_unntangle+=
+local qflist = {}
+for _, symbol in ipairs(results_lsp) do
+	local range = symbol.location.range
+	local uri = string.lower(symbol.location.uri)
+	local document_lookup = require"ntangle-lsp".document_lookup
+	local kind = vim.lsp.util._get_symbol_kind_name(symbol.kind)
+
+	if document_lookup[uri] then
+		@get_line_and_document_from_tangle
+		@make_qflist_entry
+	else
+		local filename = vim.uri_to_fname(uri)
+		local lnum = range.start.line + 1
+		local col = range.start.character + 1
+		@make_qflist_entry
+	end
+end
+
+@get_line_and_document_from_tangle+=
+local buf, refs = unpack(document_lookup[symbol.location.uri])
+local offset_start, new_lnum_start = unpack(refs[range.start.line+1])
+local lnum = new_lnum_start+1
+local col = range.start.character + 1 - offset_start
+local filename = vim.api.nvim_buf_get_name(buf)
+
+@make_qflist_entry+=
+table.insert(qflist, {
+	filename = filename,
+	lnum = lnum,
+	col = col,
+	kind = kind,
+	text = '['..kind..'] '..symbol.name
+})
+
+@put_results_in_quickfix+=
+vim.fn.setqflist(qflist)
+
+@open_quickfix+=
+vim.api.nvim_command("copen")

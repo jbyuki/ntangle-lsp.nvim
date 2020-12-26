@@ -44,4 +44,4 @@ Custom Handlers
 * [ ] window/logMessage
 * [ ] window/showMessage
 * [ ] workspace/applyEdit
-* [ ] workspace/symbol
+* [x] workspace/symbol
