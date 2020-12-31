@@ -784,11 +784,20 @@ if client.supports_method(method) then
 	client.request(method, params, handler, buf)
 end
 
+@requires+=
+local async = require("ntangle-lsp.async")
+
 @functions+=
 local function hover()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/hover', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/hover', params)
+	end
+
+	@do_action_and_open_context_menu_if_multiple_choices
 end
 
 @export_symbols+=
@@ -810,9 +819,15 @@ hover = hover,
 
 @functions+=
 local function definition()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/definition', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/definition', params)
+	end
+
+	@do_action_and_open_context_menu_if_multiple_choices
 end
 
 @export_symbols+=
@@ -862,9 +877,15 @@ end
 
 @functions+=
 local function declaration()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/declaration', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/declaration', params)
+	end
+
+	@do_action_and_open_context_menu_if_multiple_choices
 end
 
 @export_symbols+=
@@ -872,9 +893,15 @@ declaration = declaration,
 
 @functions+=
 local function type_definition()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/typeDefinition', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/typeDefinition', params)
+	end
+
+	@do_action_and_open_context_menu_if_multiple_choices
 end
 
 @export_symbols+=
@@ -882,9 +909,15 @@ type_definition = type_definition,
 
 @functions+=
 local function implementation()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/implementation', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/implementation', params)
+	end
+
+	@do_action_and_open_context_menu_if_multiple_choices
 end
 
 @export_symbols+=
@@ -947,28 +980,34 @@ register_client(bufnr, client_id)
 -- Very! important to put in vim.schedule.
 -- The cursor moves after on_lines event
 -- thus we defer the signature help function
-vim.schedule(function()
-	if new_lastline - firstline == 1 then
-		local curline = lines[firstline+1]
-		local linelen = string.len(curline)
-		local lastchar = string.sub(curline, linelen, linelen)
-		if lastchar == "(" or lastchar == "," then
-			local params = require("ntangle-lsp.util").make_position_params()
-			local buf = vim.api.nvim_get_current_buf()
-			buf_request(buf, 'textDocument/signatureHelp', params)
-		end
-	end
-end)
+-- vim.schedule(function()
+-- 	if new_lastline - firstline == 1 then
+-- 		local curline = lines[firstline+1]
+-- 		local linelen = string.len(curline)
+-- 		local lastchar = string.sub(curline, linelen, linelen)
+-- 		if lastchar == "(" or lastchar == "," then
+-- 			local params = require("ntangle-lsp.util").make_position_params()
+-- 			local buf = vim.api.nvim_get_current_buf()
+-- 			buf_request(buf, 'textDocument/signatureHelp', params)
+-- 		end
+-- 	end
+-- end)
 
 -- @define_some_general_keybindings+=
 -- vim.api.nvim_buf_set_keymap(bufnr, 'i', '<tab>', '<cmd>lua require("ntangle-lsp").completion()<CR>', {noremap = true})
 
 @functions+=
 local function completion()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/completion', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/completion', params)
+	end
+	@do_action_and_open_context_menu_if_multiple_choices
 end
+
 
 @export_symbols+=
 completion = completion,
@@ -1002,3 +1041,14 @@ end
 
 @return_response_from_handler+=
 return returned_result
+
+@do_action_and_open_context_menu_if_multiple_choices+=
+if #candidates > 1 then
+	require"contextmenu".open(candidates, {
+		on_submit = function(sel) 
+			action(sel)
+		end
+	})
+else
+	action(1)
+end

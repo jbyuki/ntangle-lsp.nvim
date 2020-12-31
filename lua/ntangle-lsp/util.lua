@@ -1,10 +1,9 @@
 -- Generated from util.lua.tl using ntangle.nvim
 
-local function make_position_params()
-	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-	
+local function make_position_params(pos, sel)
+	local row, col = unpack(pos)
 	local buffer_lookup = require("ntangle-lsp").get_buffer_lookup()
-	local prefix_len, refs, lnum = unpack(buffer_lookup[row][1])
+	local prefix_len, refs, lnum = unpack(buffer_lookup[row][sel])
 	lnum = lnum-1
 	local line = vim.api.nvim_buf_get_lines(0, row-1, row, true)[1]
 	col = vim.str_utfindex(line, col) + prefix_len
@@ -69,6 +68,20 @@ local function search_symbol(query)
 		
 	end
 	vim.api.nvim_command("copen")
+	
+end
+
+local function get_candidates_position()
+	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+	
+	local buffer_lookup = require("ntangle-lsp").get_buffer_lookup()
+	local candidates = {}
+	for _, c in ipairs(buffer_lookup[row]) do
+		local _, _, lnum = unpack(c)
+		table.insert(candidates, "L" .. lnum)
+	end
+	
+	return {row, col}, candidates
 end
 
 
@@ -77,5 +90,8 @@ return {
 	
 	search_symbol = search_symbol,
 	
+	get_candidates_position = get_candidates_position,
+	
+	get_candidates_position = get_candidates_position,
 }
 

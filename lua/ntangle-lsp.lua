@@ -1,6 +1,8 @@
 -- Generated from ntangle-lsp.lua.tl using ntangle.nvim
 require("ntangle-lsp.linkedlist")
 
+local async = require("ntangle-lsp.async")
+
 local sections = {}
 local curSection = nil
 
@@ -814,18 +816,18 @@ local function attach_to_buf(buf, client_id, language_id)
 			-- Very! important to put in vim.schedule.
 			-- The cursor moves after on_lines event
 			-- thus we defer the signature help function
-			vim.schedule(function()
-				if new_lastline - firstline == 1 then
-					local curline = lines[firstline+1]
-					local linelen = string.len(curline)
-					local lastchar = string.sub(curline, linelen, linelen)
-					if lastchar == "(" or lastchar == "," then
-						local params = require("ntangle-lsp.util").make_position_params()
-						local buf = vim.api.nvim_get_current_buf()
-						buf_request(buf, 'textDocument/signatureHelp', params)
-					end
-				end
-			end)
+			-- vim.schedule(function()
+			-- 	if new_lastline - firstline == 1 then
+			-- 		local curline = lines[firstline+1]
+			-- 		local linelen = string.len(curline)
+			-- 		local lastchar = string.sub(curline, linelen, linelen)
+			-- 		if lastchar == "(" or lastchar == "," then
+			-- 			local params = require("ntangle-lsp.util").make_position_params()
+			-- 			local buf = vim.api.nvim_get_current_buf()
+			-- 			buf_request(buf, 'textDocument/signatureHelp', params)
+			-- 		end
+			-- 	end
+			-- end)
 			
 			-- @define_some_general_keybindings+=
 			-- vim.api.nvim_buf_set_keymap(bufnr, 'i', '<tab>', '<cmd>lua require("ntangle-lsp").completion()<CR>', {noremap = true})
@@ -1047,15 +1049,43 @@ function buf_request(buf, method, params, handler)
 end
 
 local function hover()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/hover', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/hover', params)
+	end
+
+	if #candidates > 1 then
+		require"contextmenu".open(candidates, {
+			on_submit = function(sel) 
+				action(sel)
+			end
+		})
+	else
+		action(1)
+	end
 end
 
 local function definition()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/definition', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/definition', params)
+	end
+
+	if #candidates > 1 then
+		require"contextmenu".open(candidates, {
+			on_submit = function(sel) 
+				action(sel)
+			end
+		})
+	else
+		action(1)
+	end
 end
 
 local function make_location_handler(buf)
@@ -1096,21 +1126,63 @@ local function make_location_handler(buf)
 end
 
 local function declaration()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/declaration', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/declaration', params)
+	end
+
+	if #candidates > 1 then
+		require"contextmenu".open(candidates, {
+			on_submit = function(sel) 
+				action(sel)
+			end
+		})
+	else
+		action(1)
+	end
 end
 
 local function type_definition()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/typeDefinition', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/typeDefinition', params)
+	end
+
+	if #candidates > 1 then
+		require"contextmenu".open(candidates, {
+			on_submit = function(sel) 
+				action(sel)
+			end
+		})
+	else
+		action(1)
+	end
 end
 
 local function implementation()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/implementation', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/implementation', params)
+	end
+
+	if #candidates > 1 then
+		require"contextmenu".open(candidates, {
+			on_submit = function(sel) 
+				action(sel)
+			end
+		})
+	else
+		action(1)
+	end
 end
 
 local function start(lang)
@@ -1148,10 +1220,24 @@ local function start(lang)
 end
 
 local function completion()
-	local params = require("ntangle-lsp.util").make_position_params()
-	local buf = vim.api.nvim_get_current_buf()
-	buf_request(buf, 'textDocument/completion', params)
+	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
+
+	local function action(sel)
+		local params = require("ntangle-lsp.util").make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/completion', params)
+	end
+	if #candidates > 1 then
+		require"contextmenu".open(candidates, {
+			on_submit = function(sel) 
+				action(sel)
+			end
+		})
+	else
+		action(1)
+	end
 end
+
 
 local function buf_request_sync(buf, method, params)
 	local client_id = active_clients[buf]
@@ -1175,6 +1261,7 @@ local function buf_request_sync(buf, method, params)
 	end
 	
 	return returned_result
+	
 end
 
 return {
