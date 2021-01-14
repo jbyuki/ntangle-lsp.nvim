@@ -1,7 +1,7 @@
 @desc+=
 "This is actually the implementation of a double linked list"
 
-@../lua/ntangle-lsp/linkedlist.lua=
+@../../lua/ntangle-lsp/linkedlist.lua=
 linkedlist = {}
 @functions
 

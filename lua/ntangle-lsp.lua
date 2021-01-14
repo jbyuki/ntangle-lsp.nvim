@@ -1,4 +1,4 @@
--- Generated from border_window.lua.tl, contextmenu.lua.tl, debug.lua.tl, definition.lua.tl, hover.lua.tl, init_client.lua.tl, ntangle-lsp.lua.tl, parse.lua.tl, publish_diagnostics.lua.tl, send_changes.lua.tl using ntangle.nvim
+-- Generated from border_window.lua.tl, contextmenu.lua.tl, debug.lua.tl, declaration.lua.tl, definition.lua.tl, hover.lua.tl, implementation.lua.tl, init_client.lua.tl, ntangle-lsp.lua.tl, parse.lua.tl, publish_diagnostics.lua.tl, send_changes.lua.tl, type_definition.lua.tl using ntangle.nvim
 require("linkedlist")
 
 local contextmenu_contextmenu
@@ -201,6 +201,27 @@ function debug_array(l)
 		print(i .. ": " .. vim.inspect(li))
 	end
 end
+local function declaration()
+	local pos, candidates = get_candidates_position()
+
+	local function action(sel)
+		local params = make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/declaration', params)
+	end
+
+	if #candidates > 1 then
+		contextmenu_open(candidates,
+			function(sel) 
+				action(sel)
+			end
+		)
+	else
+		action(1)
+	end
+	
+end
+
 local function definition()
 	local pos, candidates = get_candidates_position()
 
@@ -323,6 +344,27 @@ function get_candidates_position()
 	return {row, col}, candidates
 end
 
+local function implementation()
+	local pos, candidates = get_candidates_position()
+
+	local function action(sel)
+		local params = make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/implementation', params)
+	end
+
+	if #candidates > 1 then
+		contextmenu_open(candidates,
+			function(sel) 
+				action(sel)
+			end
+		)
+	else
+		action(1)
+	end
+	
+end
+
 local function start(lang)
 	if not lang or lang == "cpp" then
 		vim.schedule(function()
@@ -335,10 +377,13 @@ local function start(lang)
 			cmd = { "clangd" },
 			root_dir = root_dir,
 			handlers = {
+				["textDocument/declaration"] = make_location_handler(bufnr),
 				["textDocument/definition"] = make_location_handler(bufnr),
 				
+				["textDocument/implementation"] = make_location_handler(bufnr),
 				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(bufnr),
 				
+				["textDocument/typeDefinition"] = make_location_handler(bufnr),
 				-- ["textDocument/definition"] = make_location_handler(bufnr),
 				-- ["textDocument/declaration"] = make_location_handler(bufnr),
 				-- ["textDocument/typeDefinition"] = make_location_handler(bufnr),
@@ -831,12 +876,39 @@ function outputSections(lines, file, name, prefix, refs)
 	end
 end
 
+local function type_definition()
+	local pos, candidates = get_candidates_position()
+
+	local function action(sel)
+		local params = make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/typeDefinition', params)
+	end
+
+	if #candidates > 1 then
+		contextmenu_open(candidates,
+			function(sel) 
+				action(sel)
+			end
+		)
+	else
+		action(1)
+	end
+	
+end
+
 return {
+declaration = declaration,
+
 definition = definition,
 make_location_handler = make_location_handler,
 
 hover = hover,
 
+implementation = implementation,
+
 start = start,
+
+type_definition = type_definition,
 
 }
