@@ -784,9 +784,6 @@ if client.supports_method(method) then
 	client.request(method, params, handler, buf)
 end
 
-@requires+=
-local async = require("ntangle-lsp.async")
-
 @functions+=
 local function hover()
 	local pos, candidates = require("ntangle-lsp.util").get_candidates_position()
@@ -1045,7 +1042,7 @@ return returned_result
 @do_action_and_open_context_menu_if_multiple_choices+=
 if #candidates > 1 then
 	require"contextmenu".open(candidates, {
-		on_submit = function(sel) 
+		callback = function(sel) 
 			action(sel)
 		end
 	})
