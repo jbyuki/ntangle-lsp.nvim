@@ -6,7 +6,6 @@ local make_on_publish_diagnostics
 function make_on_publish_diagnostics(buf)
 	@get_uri_of_buffer
 	return function(_, method, params, client_id)
-		print(vim.inspect(params))
 		@convert_uri_to_tangle_buffer_uri
 		@convert_line_numbers_to_tangle_line_numbers
 		@call_builtin_on_publish_diagnostics_with_modified_params

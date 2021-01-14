@@ -20,6 +20,9 @@ function attach_to_buf(buf, client_id, language_id)
 				lines = assembled
 
 				@set_filename_of_assembled
+				@set_cur_buffer_offset_assembled
+			else
+				@set_cur_buffer_offset_none
 			end
 
 			@clear_sections
@@ -28,6 +31,7 @@ function attach_to_buf(buf, client_id, language_id)
 			@for_every_root_node_send_content_to_lsp_server
 		end
 	})
+
 	vim.schedule(function()
 		@get_lines_from_buffer
 		local curassembly
@@ -41,6 +45,9 @@ function attach_to_buf(buf, client_id, language_id)
 			lines = assembled
 
 			@set_filename_of_assembled
+			@set_cur_buffer_offset_assembled
+		else
+			@set_cur_buffer_offset_none
 		end
 
 		@clear_sections
@@ -241,6 +248,7 @@ end
 if line.linetype == LineType.TEXT then
 	lines[#lines+1] = prefix .. line.str
 	@if_has_refs_save_lnum
+	@save_also_reverse_lookup
 end
 
 @if_reference_recursively_call_output+=
@@ -249,7 +257,7 @@ if line.linetype == LineType.REFERENCE then
 end
 
 @if_has_refs_save_lnum+=
-refs[#refs+1] = { string.len(prefix), line.lnum }
+refs[#refs+1] = { string.len(prefix), line.lnum - buffer_offset }
 
 @script_variables+=
 local document_lookup = {}
@@ -299,3 +307,12 @@ local params = {
 	}
 }
 client.notify('textDocument/didOpen', params)
+
+@script_variables+=
+local buffer_offset
+
+@set_cur_buffer_offset_assembled+=
+buffer_offset = offset[fn] - 1
+
+@set_cur_buffer_offset_none+=
+buffer_offset = 0
