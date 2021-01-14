@@ -1,17 +1,19 @@
--- Generated from border_window.lua.tl, contextmenu.lua.tl, debug.lua.tl, declaration.lua.tl, definition.lua.tl, hover.lua.tl, implementation.lua.tl, init_client.lua.tl, ntangle-lsp.lua.tl, parse.lua.tl, publish_diagnostics.lua.tl, send_changes.lua.tl, type_definition.lua.tl using ntangle.nvim
+-- Generated from border_window.lua.tl, buf_attach.lua.tl, contextmenu.lua.tl, debug.lua.tl, declaration.lua.tl, definition.lua.tl, hover.lua.tl, implementation.lua.tl, init_client.lua.tl, ntangle-lsp.lua.tl, parse.lua.tl, publish_diagnostics.lua.tl, send_changes.lua.tl, type_definition.lua.tl using ntangle.nvim
 require("linkedlist")
+
+local active_clients = {}
 
 local contextmenu_contextmenu
 
 local contextmenu_win
 
-local buffer_lookup = {} -- reverse lookup of document_lookup
+-- this is all for experimentation purposes...
+local client_clangd
 
-local active_clients = {}
+local bufaddress = {}
+local bufcontent = {}
 
-local document_lookup = {}
-
-local buffer_offset
+local genmeta = {}
 
 local sections = {}
 local curSection = nil
@@ -25,9 +27,9 @@ local LineType = {
 	
 }
 
-local refs = {}
-
 local fill_border
+
+local register_client
 
 local contextmenu_open
 
@@ -38,8 +40,6 @@ local buf_request
 local make_position_params
 
 local get_candidates_position
-
-local register_client
 
 local parse
 
@@ -136,6 +136,24 @@ function fill_border(borderbuf, border_opts, center_title, border_title)
 	
 end
 
+local function buf_attach()
+	local client_id = client_clangd
+	assert(client_id, "No active clangd client!")
+	local bufnr = vim.fn.bufnr(0)
+	
+	vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
+	vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
+	
+	attach_to_buf(bufnr, client_id, "cpp")
+	
+	register_client(bufnr, client_id)
+	
+end
+
+function register_client(buf, client_id)
+	-- atm only one client per buffer possible
+	active_clients[buf] = client_id
+end
 function contextmenu_open(candidates, callback)
 	local max_width = 0
 	for _, el in ipairs(candidates) do
@@ -219,7 +237,6 @@ local function declaration()
 	else
 		action(1)
 	end
-	
 end
 
 local function definition()
@@ -240,43 +257,22 @@ local function definition()
 	else
 		action(1)
 	end
-	
 end
 
 local function make_location_handler(buf)
-	local uri = string.lower(vim.uri_from_bufnr(buf))
-	
-	return function(_, method, result)
-		local converted = {}
-		if not vim.tbl_islist(result) then result = { result } end
-
-		for _, r in ipairs(result) do
-			if document_lookup[string.lower(r.uri)] then
-				local remote_uri = string.lower(r.uri)
-				local buf, refs = unpack(document_lookup[remote_uri])
-				
-				local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
-				local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
-				
-				r.range["start"].character = r.range["start"].character - offset_start
-				r.range["end"].character = r.range["end"].character - offset_end
-				
-				r.range["start"].line = new_lnum_start-1
-				r.range["end"].line = new_lnum_end-1
-				
-				r.uri = vim.uri_from_bufnr(buf)
-				
-			end
-		end
-
-		vim.lsp.util.jump_to_location(result[1])
-		
-		if #result > 1 then
-			vim.lsp.util.set_qflist(vim.lsp.util.locations_to_items(result))
-			vim.api.nvim_command("copen")
-			vim.api.nvim_command("wincmd p")
-		end
-	end
+	-- @get_uri_of_buffer
+	-- return function(_, method, result)
+		-- local converted = {}
+		-- if not vim.tbl_islist(result) then result = { result } end
+-- 
+		-- for _, r in ipairs(result) do
+			-- if document_lookup[string.lower(r.uri)] then
+				-- @convert_uri_and_location
+			-- end
+		-- end
+-- 
+		-- @call_builtin_on_location_handler_with_modified_params
+	-- end
 end
 
 function buf_request(buf, method, params, handler)
@@ -307,7 +303,6 @@ local function hover()
 	else
 		action(1)
 	end
-	
 end
 
 function make_position_params(pos, sel)
@@ -362,26 +357,20 @@ local function implementation()
 	else
 		action(1)
 	end
-	
 end
 
 local function start(lang)
 	if not lang or lang == "cpp" then
-		vim.schedule(function()
 		vim.lsp.set_log_level("debug")
-		local bufnr = vim.fn.bufnr(0)
-		
-		local root_dir = vim.fn.fnamemodify(vim.api.nvim_buf_get_name(0), ":p:h")
-		
 		local client_id = vim.lsp.start_client {
 			cmd = { "clangd" },
-			root_dir = root_dir,
+			root_dir = ".",
 			handlers = {
 				["textDocument/declaration"] = make_location_handler(bufnr),
 				["textDocument/definition"] = make_location_handler(bufnr),
 				
 				["textDocument/implementation"] = make_location_handler(bufnr),
-				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(bufnr),
+				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(),
 				
 				["textDocument/typeDefinition"] = make_location_handler(bufnr),
 				-- ["textDocument/definition"] = make_location_handler(bufnr),
@@ -391,140 +380,141 @@ local function start(lang)
 			},
 		}
 		
-		vim.wait(500)
-		print("LSP starting...")
-		
-		register_client(bufnr, client_id)
-		
-		vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
-		vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
-		
-		attach_to_buf(bufnr, client_id, "cpp")
-		
-		end)
+		client_clangd = client_id
 	end
 end
 
-function register_client(buf, client_id)
-	active_clients[buf] = client_id
-end
-function parse(lines)
-	lnum = 1
-	for _,line in ipairs(lines) do
-		if string.match(line, "^%s*@@") then
-			local hasSection = false
-			if sections[name] then
-				hasSection = true
-			end
-			
-			if hasSection then
-				local _,_,pre,post = string.find(line, '^(.*)@@(.*)$')
-				local text = pre .. "@" .. post
-				local l = { 
-					linetype = LineType.TEXT, 
-					str = text 
-				}
-				
-				l.lnum = lnum
-				
-				linkedlist.push_back(curSection.lines, l)
-				
-			end
-		
-		elseif string.match(line, "^@[^@]%S*[+-]?=%s*$") then
-			local _, _, name, op = string.find(line, "^@(%S-)([+-]?=)%s*$")
-			
-			local section = { linetype = LineType.SECTION, str = name, lines = {}}
-			
-			if op == '+=' or op == '-=' then
+function parse(assembly_lines)
+	local parts = vim.tbl_keys(assembly_lines)
+	table.sort(parts)
+	
+
+	for _, part in ipairs(parts) do
+		local lines = assembly_lines[part]
+		local lnum = 1
+		for _,line in ipairs(lines) do
+			if string.match(line, "^%s*@@") then
+				local hasSection = false
 				if sections[name] then
-					if op == '+=' then
+					hasSection = true
+				end
+				
+				if hasSection then
+					local _,_,pre,post = string.find(line, '^(.*)@@(.*)$')
+					local text = pre .. "@" .. post
+					local l = { 
+						linetype = LineType.TEXT, 
+						str = text 
+					}
+					
+					l.lnum = lnum
+					l.part = part
+					
+					linkedlist.push_back(curSection.lines, l)
+					
+				end
+			
+			elseif string.match(line, "^@[^@]%S*[+-]?=%s*$") then
+				local _, _, name, op = string.find(line, "^@(%S-)([+-]?=)%s*$")
+				
+				local section = { linetype = LineType.SECTION, str = name, lines = {}}
+				
+				if op == '+=' or op == '-=' then
+					if sections[name] then
+						if op == '+=' then
+							linkedlist.push_back(sections[name].list, section)
+							
+						elseif op == '-=' then
+							linkedlist.push_front(sections[name].list, section)
+							
+						end
+					else
+						sections[name] = { root = false, list = {} }
+						
 						linkedlist.push_back(sections[name].list, section)
 						
-					elseif op == '-=' then
-						linkedlist.push_front(sections[name].list, section)
-						
 					end
-				else
-					sections[name] = { root = false, list = {} }
+				
+				else 
+					sections[name] = { root = true, list = {} }
 					
 					linkedlist.push_back(sections[name].list, section)
 					
 				end
-			
-			else 
-				sections[name] = { root = true, list = {} }
 				
-				linkedlist.push_back(sections[name].list, section)
+				curSection = section
+				
+			
+			elseif string.match(line, "^%s*@[^@]%S*%s*$") then
+				local _, _, prefix, name = string.find(line, "^(%s*)@(%S+)%s*$")
+				if name == nil then
+					print(line)
+				end
+				
+				-- @check_that_sections_is_not_empty
+				local l = { 
+					linetype = LineType.REFERENCE, 
+					str = name,
+					prefix = prefix
+				}
+				
+				l.lnum = lnum
+				l.part = part
+				
+				linkedlist.push_back(curSection.lines, l)
+				
+			
+			elseif string.match(line, "^##%S*%s*$") then
+			else
+				if sections[name] then
+					hasSection = true
+				end
+				
+				local l = { 
+					linetype = LineType.TEXT, 
+					str = line 
+				}
+				
+				l.lnum = lnum
+				l.part = part
+				
+				linkedlist.push_back(curSection.lines, l)
 				
 			end
 			
-			curSection = section
-			
-		
-		elseif string.match(line, "^%s*@[^@]%S*%s*$") then
-			local _, _, prefix, name = string.find(line, "^(%s*)@(%S+)%s*$")
-			if name == nil then
-				print(line)
-			end
-			
-			-- @check_that_sections_is_not_empty
-			local l = { 
-				linetype = LineType.REFERENCE, 
-				str = name,
-				prefix = prefix
-			}
-			
-			l.lnum = lnum
-			
-			refs[name] = refs[name] or {}
-			table.insert(refs[name], curSection.str)
-			linkedlist.push_back(curSection.lines, l)
-			
-		
-		else
-			if sections[name] then
-				hasSection = true
-			end
-			
-			local l = { 
-				linetype = LineType.TEXT, 
-				str = line 
-			}
-			
-			l.lnum = lnum
-			
-			linkedlist.push_back(curSection.lines, l)
-			
+			lnum = lnum+1;
 		end
-		
-		lnum = lnum+1;
 	end
 end
 
-function make_on_publish_diagnostics(buf)
-	local uri = string.lower(vim.uri_from_bufnr(buf))
-	
+function make_on_publish_diagnostics()
 	return function(_, method, params, client_id)
-		local remote_uri = params.uri
-		params.uri = uri
+		local meta = genmeta[params.uri]
 		
-		local _, refs = unpack(document_lookup[remote_uri])
+		local new_params = {}
+		new_params.uri = vim.uri_from_bufnr(0)
+		
 		for _, diag in ipairs(params.diagnostics) do
-			local lnum_start = diag.range["start"].line
-			local lnum_end = diag.range["end"].line
-		
-			local offset_start, new_lnum_start = unpack(refs[lnum_start+1])
-			local offset_end, new_lnum_end = unpack(refs[lnum_end+1])
-		
+			local line_start_gen = diag.range["start"].line+1
+			local line_end_gen = diag.range["end"].line+1
+			
+			local offset_start = meta[line_start_gen].offset
+			local offset_end = meta[line_end_gen].offset
+			
 			diag.range["start"].character = diag.range["start"].character - offset_start
 			diag.range["end"].character = diag.range["end"].character - offset_end
-		
-			diag.range["start"].line = new_lnum_start-1
-			diag.range["end"].line = new_lnum_end-1
+			
+			diag.range["start"].line = meta[line_start_gen].lnum-1
+			diag.range["end"].line = meta[line_end_gen].lnum-1
+			
+			new_params.diagnostics = new_params.diagnostics or {}
+			local part = meta[line_start_gen].part
+			if part == vim.api.nvim_buf_get_name(0) then
+				table.insert(new_params.diagnostics, diag)
+			end
+			
 		end
-		
-		vim.lsp.diagnostic.on_publish_diagnostics(_, method, params, client_id)
+		vim.lsp.diagnostic.on_publish_diagnostics(_, method, new_params, client_id)
 	end
 end
 
@@ -535,111 +525,103 @@ function attach_to_buf(buf, client_id, language_id)
 
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
-			local lines = vim.api.nvim_buf_get_lines(0, 0, -1, true)
+			local assembly_filename, buffer_name = unpack(bufaddress[buf])
+			local lines = bufcontent[assembly_filename][buffer_name]
 			
+			for _=firstline+1,lastline do
+				table.remove(lines, firstline+1)
+			end
+			
+			local changed = vim.api.nvim_buf_get_lines(buf, firstline, new_lastline, true)
+			for _, line in ipairs(changed) do
+				table.insert(lines, firstline+1, line)
+			end
+			
+
 			local curassembly
-			local line = lines[1] or ""
-			if string.match(lines[1], "^##%S*%s*$") then
-				local name = string.match(line, "^##(%S*)%s*$")
+			local assembly_filename
+			local top = lines[1] or ""
+			if string.match(top, "^##%S*%s*$") then
+				local name = string.match(top, "^##(%S*)%s*$")
 				
 				curassembly = name
 				
+				local bufname = vim.api.nvim_buf_get_name(buf)
+				local extname = vim.fn.fnamemodify(bufname, ":e:e")
+				local relname = vim.fn.fnamemodify(curassembly, ":h")
+				local assname = vim.fn.fnamemodify(curassembly, ":t")
+				local parent = vim.fn.fnamemodify(bufname, ":h")
+				assembly_filename = parent .. "/" .. relname .. "/tangle/" .. assname .. "." .. extname
+				
 			end
 			
-			local filename
-			if curassembly then
-				local fn = vim.api.nvim_buf_get_name(0)
-				local parendir = vim.fn.fnamemodify(fn, ":p:h")
-				local assembly_parendir = vim.fn.fnamemodify(curassembly, ":h")
-				local assembly_tail = vim.fn.fnamemodify(curassembly, ":t")
-				local part_tail = vim.fn.fnamemodify(fn, ":t")
-				local link_name = parendir .. "/" .. assembly_parendir .. "/tangle/" .. assembly_tail .. "." .. part_tail
-				local path = vim.fn.fnamemodify(link_name, ":h")
-				
+			if not curassembly then
+				assembly_filename = vim.api.nvim_buf_get_name(buf)
+			end
+			
 
-				local assembled = {}
-				local valid_parts = {}
-				
-				local offset = {}
-				
-				local origin = {}
-				
-				path = vim.fn.fnamemodify(path, ":p")
-				local parts = vim.split(vim.fn.glob(path .. assembly_tail .. ".*.tl"), "\n")
-				link_name = vim.fn.fnamemodify(link_name, ":p")
-				for _, part in ipairs(parts) do
-					if link_name ~= part then
-						local f = io.open(part, "r")
-						local origin_path = f:read("*line")
-						f:close()
-						
-						local f = io.open(origin_path, "r")
-						if f then
-							table.insert(valid_parts, vim.fn.fnamemodify(part, ":t:e:e:e"))
-							
-							offset[origin_path] = #assembled
-							
-							local lnum = 1
-							while true do
-								local line = f:read("*line")
-								if not line then break end
-								if lnum > 1 then
-									table.insert(assembled, line)
-									table.insert(origin, origin_path)
-									
-								end
-								lnum = lnum + 1
-							end
+			if curassembly ~= assembly_filename then
+				local bufname = vim.api.nvim_buf_get_name(buf)
+				bufcontent[assembly_filename][bufname] = nil
+			
+				if not bufcontent[assembly_filename] then
+					local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
+					local assembly_root = vim.fn.fnamemodify(assembly_filename, ":r:r")
+					
+					local parts = vim.split(vim.fn.glob(assembly_root .. ".*." .. extname), "\n")
+					
+					bufcontent[assembly_filename] = {}
+					
+					for _, part in ipairs(parts) do
+						if part ~= "" then
+							local origin_path
+							local f = io.open(part, "r")
+							local origin_path = f:read("*line")
 							f:close()
-						else
-							os.remove(part)
 							
-						end
-						
-					else
-						table.insert(valid_parts, vim.fn.fnamemodify(part, ":t:e:e:e"))
-						
-						offset[fn] = #assembled
-						
-						for lnum, line in ipairs(lines) do
-							if lnum > 1 then
-								table.insert(assembled, line)
-								table.insert(origin, fn)
+							if origin_path ~= bufname and not bufcontent[assembly_filename][origin_path] then
+								local partlines = {}
+								local f = io.open(origin_path, "r")
+								if f then
+									local lnum = 1
+									while true do
+										local line = f:read("*line")
+										if not line then break end
+										if lnum > 1 then
+											table.insert(partlines, line)
+										end
+										lnum = lnum + 1
+									end
+									f:close()
+								end
+								bufcontent[assembly_filename][origin_path] = partlines
 								
 							end
 						end
-						
 					end
+					
 				end
-				
-				lines = assembled
-
-				local ext = vim.fn.fnamemodify(fn, ":e:e")
-				filename = parendir .. "/" .. assembly_parendir .. "/" .. assembly_tail .. "." .. ext
-				
-				buffer_offset = offset[fn] - 1
-				
-			else
-				buffer_offset = 0
-			end
-
-			buffer_lookup = {}
 			
+				local bufname = vim.api.nvim_buf_get_name(buf)
+				bufcontent[assembly_filename][bufname] = lines
+				
+				bufaddress[buf] = { assembly_filename, bufname }
+				
+			end
+			
+
 			sections = {}
 			curSection = nil
 			
-			parse(lines)
+			parse(bufcontent[assembly_filename])
 			
 
-			if not filename then
-				filename = vim.api.nvim_buf_get_name(0)
-			end
-			local parendir = vim.fn.fnamemodify(filename, ":p:h")
+			local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
 			for name, section in pairs(sections) do
 				if section.root then
 					local fn
 					if name == "*" then
-						local tail = vim.api.nvim_call_function("fnamemodify", { filename, ":t:r" })
+						local tail = vim.fn.fnamemodify( assembly_filename, ":t:r" )
 						fn = parendir .. "/tangle/" .. tail
 					
 					else
@@ -651,7 +633,10 @@ function attach_to_buf(buf, client_id, language_id)
 					end
 					
 					local lines = {}
-					local refs = {}
+					local uri = string.lower(vim.uri_from_fname(fn))
+					
+					genmeta[uri] = {}
+					
 					if string.match(fn, "lua$") then
 						local relname
 						if filename then
@@ -661,6 +646,8 @@ function attach_to_buf(buf, client_id, language_id)
 						end
 						relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
 						table.insert(lines, "-- Generated from " .. relname .. " using ntangle.nvim")
+						table.insert(genmeta[name], {})
+						
 					elseif string.match(fn, "vim$") then
 						local relname
 						if filename then
@@ -670,13 +657,11 @@ function attach_to_buf(buf, client_id, language_id)
 						end
 						relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
 						table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
+						table.insert(genmeta[name], {})
+						
 					end
 					
-					local uri = string.lower(vim.uri_from_fname(fn))
-					
-					outputSections(lines, file, name, "", refs)
-					document_lookup[uri] = {buf, refs}
-					
+					outputSections(assembly_filename, lines, uri, name, "")
 					client.notify("textDocument/didChange", {
 						textDocument = {
 						  uri = uri;
@@ -690,114 +675,91 @@ function attach_to_buf(buf, client_id, language_id)
 				end
 			end
 			
+			
 		end
 	})
 
 	vim.schedule(function()
-		local lines = vim.api.nvim_buf_get_lines(0, 0, -1, true)
+		local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
 		
+
 		local curassembly
-		local line = lines[1] or ""
-		if string.match(lines[1], "^##%S*%s*$") then
-			local name = string.match(line, "^##(%S*)%s*$")
+		local assembly_filename
+		local top = lines[1] or ""
+		if string.match(top, "^##%S*%s*$") then
+			local name = string.match(top, "^##(%S*)%s*$")
 			
 			curassembly = name
 			
+			local bufname = vim.api.nvim_buf_get_name(buf)
+			local extname = vim.fn.fnamemodify(bufname, ":e:e")
+			local relname = vim.fn.fnamemodify(curassembly, ":h")
+			local assname = vim.fn.fnamemodify(curassembly, ":t")
+			local parent = vim.fn.fnamemodify(bufname, ":h")
+			assembly_filename = parent .. "/" .. relname .. "/tangle/" .. assname .. "." .. extname
+			
 		end
 		
-		local filename
-		if curassembly then
-			local fn = vim.api.nvim_buf_get_name(0)
-			local parendir = vim.fn.fnamemodify(fn, ":p:h")
-			local assembly_parendir = vim.fn.fnamemodify(curassembly, ":h")
-			local assembly_tail = vim.fn.fnamemodify(curassembly, ":t")
-			local part_tail = vim.fn.fnamemodify(fn, ":t")
-			local link_name = parendir .. "/" .. assembly_parendir .. "/tangle/" .. assembly_tail .. "." .. part_tail
-			local path = vim.fn.fnamemodify(link_name, ":h")
-			
+		if not curassembly then
+			assembly_filename = vim.api.nvim_buf_get_name(buf)
+		end
+		
 
-			local assembled = {}
-			local valid_parts = {}
+		if not bufcontent[assembly_filename] then
+			local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
+			local assembly_root = vim.fn.fnamemodify(assembly_filename, ":r:r")
 			
-			local offset = {}
+			local parts = vim.split(vim.fn.glob(assembly_root .. ".*." .. extname), "\n")
 			
-			local origin = {}
+			bufcontent[assembly_filename] = {}
 			
-			path = vim.fn.fnamemodify(path, ":p")
-			local parts = vim.split(vim.fn.glob(path .. assembly_tail .. ".*.tl"), "\n")
-			link_name = vim.fn.fnamemodify(link_name, ":p")
 			for _, part in ipairs(parts) do
-				if link_name ~= part then
+				if part ~= "" then
+					local origin_path
 					local f = io.open(part, "r")
 					local origin_path = f:read("*line")
 					f:close()
 					
-					local f = io.open(origin_path, "r")
-					if f then
-						table.insert(valid_parts, vim.fn.fnamemodify(part, ":t:e:e:e"))
-						
-						offset[origin_path] = #assembled
-						
-						local lnum = 1
-						while true do
-							local line = f:read("*line")
-							if not line then break end
-							if lnum > 1 then
-								table.insert(assembled, line)
-								table.insert(origin, origin_path)
-								
+					if origin_path ~= bufname and not bufcontent[assembly_filename][origin_path] then
+						local partlines = {}
+						local f = io.open(origin_path, "r")
+						if f then
+							local lnum = 1
+							while true do
+								local line = f:read("*line")
+								if not line then break end
+								if lnum > 1 then
+									table.insert(partlines, line)
+								end
+								lnum = lnum + 1
 							end
-							lnum = lnum + 1
+							f:close()
 						end
-						f:close()
-					else
-						os.remove(part)
+						bufcontent[assembly_filename][origin_path] = partlines
 						
 					end
-					
-				else
-					table.insert(valid_parts, vim.fn.fnamemodify(part, ":t:e:e:e"))
-					
-					offset[fn] = #assembled
-					
-					for lnum, line in ipairs(lines) do
-						if lnum > 1 then
-							table.insert(assembled, line)
-							table.insert(origin, fn)
-							
-						end
-					end
-					
 				end
 			end
 			
-			lines = assembled
-
-			local ext = vim.fn.fnamemodify(fn, ":e:e")
-			filename = parendir .. "/" .. assembly_parendir .. "/" .. assembly_tail .. "." .. ext
-			
-			buffer_offset = offset[fn] - 1
-			
-		else
-			buffer_offset = 0
 		end
 
-		buffer_lookup = {}
+		local bufname = vim.api.nvim_buf_get_name(buf)
+		bufcontent[assembly_filename][bufname] = lines
 		
+		bufaddress[buf] = { assembly_filename, bufname }
+		
+
 		sections = {}
 		curSection = nil
 		
-		parse(lines)
+		parse(bufcontent[assembly_filename])
 		
-		if not filename then
-			filename = vim.api.nvim_buf_get_name(0)
-		end
-		local parendir = vim.fn.fnamemodify(filename, ":p:h")
+		local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
 		for name, section in pairs(sections) do
 			if section.root then
 				local fn
 				if name == "*" then
-					local tail = vim.api.nvim_call_function("fnamemodify", { filename, ":t:r" })
+					local tail = vim.fn.fnamemodify( assembly_filename, ":t:r" )
 					fn = parendir .. "/tangle/" .. tail
 				
 				else
@@ -809,7 +771,10 @@ function attach_to_buf(buf, client_id, language_id)
 				end
 				
 				local lines = {}
-				local refs = {}
+				local uri = string.lower(vim.uri_from_fname(fn))
+				
+				genmeta[uri] = {}
+				
 				if string.match(fn, "lua$") then
 					local relname
 					if filename then
@@ -819,6 +784,8 @@ function attach_to_buf(buf, client_id, language_id)
 					end
 					relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
 					table.insert(lines, "-- Generated from " .. relname .. " using ntangle.nvim")
+					table.insert(genmeta[name], {})
+					
 				elseif string.match(fn, "vim$") then
 					local relname
 					if filename then
@@ -828,13 +795,11 @@ function attach_to_buf(buf, client_id, language_id)
 					end
 					relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
 					table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
+					table.insert(genmeta[name], {})
+					
 				end
 				
-				outputSections(lines, file, name, "", refs)
-				local uri = string.lower(vim.uri_from_fname(fn))
-				
-				document_lookup[uri] = {buf, refs}
-				
+				outputSections(assembly_filename, lines, uri, name, "")
 				local params = {
 					textDocument = {
 						version = 0,
@@ -852,7 +817,7 @@ function attach_to_buf(buf, client_id, language_id)
 	end)
 end
 
-function outputSections(lines, file, name, prefix, refs)
+function outputSections(assembly_filename, lines, uri, name, prefix)
 	if not sections[name] then
 		return
 	end
@@ -861,15 +826,17 @@ function outputSections(lines, file, name, prefix, refs)
 		for line in linkedlist.iter(section.lines) do
 			if line.linetype == LineType.TEXT then
 				lines[#lines+1] = prefix .. line.str
-				refs[#refs+1] = { string.len(prefix), line.lnum - buffer_offset }
+				table.insert(genmeta[uri], {
+					part = line.part,
+					lnum = line.lnum,
+					text = line.str,
+					offset = string.len(prefix),
+				})
 				
-				local rel = line.lnum - buffer_offset
-				buffer_lookup[rel] = buffer_lookup[rel] or {}
-				table.insert(buffer_lookup[rel], { string.len(prefix), refs, #refs }) -- only saves refs table reference
 			end
 			
 			if line.linetype == LineType.REFERENCE then
-				outputSections(lines, file, line.str, prefix .. line.prefix, refs)
+				outputSections(assembly_filename, lines, uri, line.str, prefix .. line.prefix)
 			end
 			
 		end
@@ -894,10 +861,11 @@ local function type_definition()
 	else
 		action(1)
 	end
-	
 end
 
 return {
+buf_attach = buf_attach,
+
 declaration = declaration,
 
 definition = definition,

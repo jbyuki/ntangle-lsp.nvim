@@ -21,19 +21,19 @@ make_location_handler = make_location_handler,
 
 @functions+=
 local function make_location_handler(buf)
-	@get_uri_of_buffer
-	return function(_, method, result)
-		local converted = {}
-		if not vim.tbl_islist(result) then result = { result } end
-
-		for _, r in ipairs(result) do
-			if document_lookup[string.lower(r.uri)] then
-				@convert_uri_and_location
-			end
-		end
-
-		@call_builtin_on_location_handler_with_modified_params
-	end
+	-- @get_uri_of_buffer
+	-- return function(_, method, result)
+		-- local converted = {}
+		-- if not vim.tbl_islist(result) then result = { result } end
+-- 
+		-- for _, r in ipairs(result) do
+			-- if document_lookup[string.lower(r.uri)] then
+				-- @convert_uri_and_location
+			-- end
+		-- end
+-- 
+		-- @call_builtin_on_location_handler_with_modified_params
+	-- end
 end
 
 @convert_uri_and_location+=

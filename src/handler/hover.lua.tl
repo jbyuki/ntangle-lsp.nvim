@@ -93,14 +93,3 @@ if #candidates > 1 then
 else
 	action(1)
 end
-
-@script_variables+=
-local buffer_lookup = {} -- reverse lookup of document_lookup
-
-@clear_sections+=
-buffer_lookup = {}
-
-@save_also_reverse_lookup+=
-local rel = line.lnum - buffer_offset
-buffer_lookup[rel] = buffer_lookup[rel] or {}
-table.insert(buffer_lookup[rel], { string.len(prefix), refs, #refs }) -- only saves refs table reference

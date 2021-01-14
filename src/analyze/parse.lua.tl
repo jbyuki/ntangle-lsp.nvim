@@ -3,16 +3,26 @@
 local parse
 
 @functions+=
-function parse(lines)
-	lnum = 1
-	for _,line in ipairs(lines) do
-		@check_if_line_escape_double_at
-		@check_if_line_is_section
-		@check_if_line_is_reference
-		@otherwise_add_to_section
-		lnum = lnum+1;
+function parse(assembly_lines)
+	@list_keys_and_sort_them_for_deterministic_iteration
+
+	for _, part in ipairs(parts) do
+		local lines = assembly_lines[part]
+		local lnum = 1
+		for _,line in ipairs(lines) do
+			@check_if_line_escape_double_at
+			@check_if_line_is_section
+			@check_if_line_is_reference
+			@check_if_line_is_assembly_name
+			@otherwise_add_to_section
+			lnum = lnum+1;
+		end
 	end
 end
+
+@list_keys_and_sort_them_for_deterministic_iteration+=
+local parts = vim.tbl_keys(assembly_lines)
+table.sort(parts)
 
 @check_if_line_is_section+=
 elseif string.match(line, "^@[^@]%S*[+-]?=%s*$") then
@@ -147,16 +157,15 @@ linkedlist.push_back(curSection.lines, l)
 
 @create_text_line+=
 l.lnum = lnum
+l.part = part
 
 @create_line_reference+=
 l.lnum = lnum
+l.part = part
 
 @create_text_line_without_at+=
 l.lnum = lnum
+l.part = part
 
-@parse_variables+=
-local refs = {}
-
-@create_line_reference+=
-refs[name] = refs[name] or {}
-table.insert(refs[name], curSection.str)
+@check_if_line_is_assembly_name+=
+elseif string.match(line, "^##%S*%s*$") then

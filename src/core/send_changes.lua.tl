@@ -8,22 +8,15 @@ function attach_to_buf(buf, client_id, language_id)
 
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
-			@get_lines_from_buffer
+			@retrieve_lines_from_this_buffer
+			@apply_modifications_to_lines_of_buffer
+
 			local curassembly
-			@read_assembly_name_if_any
-			local filename
-			if curassembly then
-				@construct_path_for_link_file
+			local assembly_filename
+			@read_assembly_name_if_any_and_figure_out_fictional_full_path
+			@if_no_assembly_replace_with_current_filename
 
-				local assembled = {}
-				@glob_all_links_and_assemble
-				lines = assembled
-
-				@set_filename_of_assembled
-				@set_cur_buffer_offset_assembled
-			else
-				@set_cur_buffer_offset_none
-			end
+			@if_assembly_doesnt_match_move_lines_from_assembly
 
 			@clear_sections
 			@parse_tangle_from_lines
@@ -34,21 +27,19 @@ function attach_to_buf(buf, client_id, language_id)
 
 	vim.schedule(function()
 		@get_lines_from_buffer
+
 		local curassembly
-		@read_assembly_name_if_any
-		local filename
-		if curassembly then
-			@construct_path_for_link_file
+		local assembly_filename
+		@read_assembly_name_if_any_and_figure_out_fictional_full_path
+		@if_no_assembly_replace_with_current_filename
 
-			local assembled = {}
-			@glob_all_links_and_assemble
-			lines = assembled
-
-			@set_filename_of_assembled
-			@set_cur_buffer_offset_assembled
-		else
-			@set_cur_buffer_offset_none
+		if not bufcontent[assembly_filename] then
+			@glob_all_links
+			@foreach_part_append_them_to_assembled
 		end
+
+		@put_lines_from_current_buffer_into_assembly
+		@save_bufaddress_for_current_buffer
 
 		@clear_sections
 		@parse_tangle_from_lines
@@ -61,41 +52,58 @@ local client = vim.lsp.get_client_by_id(client_id)
 assert(client, "Could not find client_id")
 
 @get_lines_from_buffer+=
-local lines = vim.api.nvim_buf_get_lines(0, 0, -1, true)
+local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
 
-@read_assembly_name_if_any+=
-local line = lines[1] or ""
-if string.match(lines[1], "^##%S*%s*$") then
+@read_assembly_name_if_any_and_figure_out_fictional_full_path+=
+local top = lines[1] or ""
+if string.match(top, "^##%S*%s*$") then
 	@extract_assembly_name
 	@set_as_current_assembly
+	@make_assembly_path
 end
 
 @extract_assembly_name+=
-local name = string.match(line, "^##(%S*)%s*$")
+local name = string.match(top, "^##(%S*)%s*$")
 
 @set_as_current_assembly+=
 curassembly = name
 
-@construct_path_for_link_file+=
-local fn = vim.api.nvim_buf_get_name(0)
-local parendir = vim.fn.fnamemodify(fn, ":p:h")
-local assembly_parendir = vim.fn.fnamemodify(curassembly, ":h")
-local assembly_tail = vim.fn.fnamemodify(curassembly, ":t")
-local part_tail = vim.fn.fnamemodify(fn, ":t")
-local link_name = parendir .. "/" .. assembly_parendir .. "/tangle/" .. assembly_tail .. "." .. part_tail
-local path = vim.fn.fnamemodify(link_name, ":h")
+@make_assembly_path+=
+local bufname = vim.api.nvim_buf_get_name(buf)
+local extname = vim.fn.fnamemodify(bufname, ":e:e")
+local relname = vim.fn.fnamemodify(curassembly, ":h")
+local assname = vim.fn.fnamemodify(curassembly, ":t")
+local parent = vim.fn.fnamemodify(bufname, ":h")
+assembly_filename = parent .. "/" .. relname .. "/tangle/" .. assname .. "." .. extname
 
-@glob_all_links_and_assemble+=
-path = vim.fn.fnamemodify(path, ":p")
-local parts = vim.split(vim.fn.glob(path .. assembly_tail .. ".*.tl"), "\n")
-link_name = vim.fn.fnamemodify(link_name, ":p")
+@if_no_assembly_replace_with_current_filename+=
+if not curassembly then
+	assembly_filename = vim.api.nvim_buf_get_name(buf)
+end
+
+@glob_all_links+=
+local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
+local assembly_root = vim.fn.fnamemodify(assembly_filename, ":r:r")
+
+local parts = vim.split(vim.fn.glob(assembly_root .. ".*." .. extname), "\n")
+
+@script_variables+=
+local bufaddress = {}
+local bufcontent = {}
+
+@save_bufaddress_for_current_buffer+=
+bufaddress[buf] = { assembly_filename, bufname }
+
+@foreach_part_append_them_to_assembled+=
+bufcontent[assembly_filename] = {}
+
 for _, part in ipairs(parts) do
-	if link_name ~= part then
+	if part ~= "" then
+		local origin_path
 		@read_link_from_link_file
-		@append_lines_from_part_file
-	else
-		@add_to_parts_for_generated
-		@append_current_buffer_to_the_assembled
+		if origin_path ~= bufname and not bufcontent[assembly_filename][origin_path] then
+			@append_lines_to_bufcontent_for_part
+		end
 	end
 end
 
@@ -104,92 +112,49 @@ local f = io.open(part, "r")
 local origin_path = f:read("*line")
 f:close()
 
-@append_lines_from_part_file+=
+@append_lines_to_bufcontent_for_part+=
+local partlines = {}
 local f = io.open(origin_path, "r")
 if f then
-	@add_to_parts_for_generated
-	@put_offset_in_assembled_for_part
 	local lnum = 1
 	while true do
 		local line = f:read("*line")
 		if not line then break end
 		if lnum > 1 then
-			table.insert(assembled, line)
-			@append_origin_to_assembled_array
+			table.insert(partlines, line)
 		end
 		lnum = lnum + 1
 	end
 	f:close()
-else
-	@remove_link_file
 end
+bufcontent[assembly_filename][origin_path] = partlines
 
-@remove_link_file+=
-os.remove(part)
-
-@glob_all_links_and_assemble-=
-local origin = {}
-
-@append_origin_to_assembled_array+=
-table.insert(origin, origin_path)
-
-@append_current_origin_to_assembled_array+=
-table.insert(origin, fn)
-
-@glob_all_links_and_assemble-=
-local offset = {}
-
-@put_offset_in_assembled_for_part+=
-offset[origin_path] = #assembled
-
-@put_offset_in_assembled_for_current+=
-offset[fn] = #assembled
-
-@append_current_buffer_to_the_assembled+=
-@put_offset_in_assembled_for_current
-for lnum, line in ipairs(lines) do
-	if lnum > 1 then
-		table.insert(assembled, line)
-		@append_current_origin_to_assembled_array
-	end
-end
-
-@glob_all_links_and_assemble-=
-local valid_parts = {}
-
-@add_to_parts_for_generated+=
-table.insert(valid_parts, vim.fn.fnamemodify(part, ":t:e:e:e"))
+@put_lines_from_current_buffer_into_assembly+=
+local bufname = vim.api.nvim_buf_get_name(buf)
+bufcontent[assembly_filename][bufname] = lines
 
 @parse_tangle_from_lines+=
-parse(lines)
+parse(bufcontent[assembly_filename])
 
-@set_filename_of_assembled+=
-local ext = vim.fn.fnamemodify(fn, ":e:e")
-filename = parendir .. "/" .. assembly_parendir .. "/" .. assembly_tail .. "." .. ext
-
-@for_every_root_node_send_content_to_lsp_server+=
-if not filename then
-	filename = vim.api.nvim_buf_get_name(0)
-end
-local parendir = vim.fn.fnamemodify(filename, ":p:h")
+@for_every_root_node_send_did_open_to_lsp_server+=
+local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
 for name, section in pairs(sections) do
 	if section.root then
 		local fn
 		@if_star_replace_with_current_filename
 		@otherwise_put_node_name
 		local lines = {}
-		local refs = {}
-		@output_generated_header
 		@get_text_document_uri
-		outputSections(lines, file, name, "", refs)
-		@save_document_refs
-		@send_new_content_to_lsp_server
+		@init_reverse_lookup
+		@output_generated_header
+		outputSections(assembly_filename, lines, uri, name, "")
+		@send_did_open_to_lsp_server
 	end
 end
 
 @if_star_replace_with_current_filename+=
 if name == "*" then
-	local tail = vim.api.nvim_call_function("fnamemodify", { filename, ":t:r" })
+	local tail = vim.fn.fnamemodify( assembly_filename, ":t:r" )
 	fn = parendir .. "/tangle/" .. tail
 
 @otherwise_put_node_name+=
@@ -201,35 +166,11 @@ else
 	end
 end
 
-@output_generated_header+=
-if string.match(fn, "lua$") then
-	local relname
-	if filename then
-		relname = filename
-	else
-		relname = vim.api.nvim_buf_get_name(0)
-	end
-	relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
-	table.insert(lines, "-- Generated from " .. relname .. " using ntangle.nvim")
-elseif string.match(fn, "vim$") then
-	local relname
-	if filename then
-		relname = filename
-	else
-		relname = vim.api.nvim_buf_get_name(0)
-	end
-	relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
-	table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
-end
-
-@get_text_document_uri+=
-local uri = string.lower(vim.uri_from_fname(fn))
-
 @declare_functions+=
 local outputSections
 
 @functions+=
-function outputSections(lines, file, name, prefix, refs)
+function outputSections(assembly_filename, lines, uri, name, prefix)
 	@check_if_section_exists_otherwise_return_nil
 	for section in linkedlist.iter(sections[name].list) do
 		for line in linkedlist.iter(section.lines) do
@@ -247,54 +188,33 @@ end
 @if_line_is_text_output_it+=
 if line.linetype == LineType.TEXT then
 	lines[#lines+1] = prefix .. line.str
-	@if_has_refs_save_lnum
 	@save_also_reverse_lookup
 end
 
 @if_reference_recursively_call_output+=
 if line.linetype == LineType.REFERENCE then
-	outputSections(lines, file, line.str, prefix .. line.prefix, refs)
+	outputSections(assembly_filename, lines, uri, line.str, prefix .. line.prefix)
 end
-
-@if_has_refs_save_lnum+=
-refs[#refs+1] = { string.len(prefix), line.lnum - buffer_offset }
 
 @script_variables+=
-local document_lookup = {}
+local genmeta = {}
 
-@save_document_refs+=
-document_lookup[uri] = {buf, refs}
+@init_reverse_lookup+=
+genmeta[uri] = {}
 
-@send_new_content_to_lsp_server+=
-client.notify("textDocument/didChange", {
-	textDocument = {
-	  uri = uri;
-	  version = changedtick;
-	};
-	contentChanges = { {
-		text = table.concat(lines, "\n")
-	} }
+@save_also_reverse_lookup+=
+table.insert(genmeta[uri], {
+	part = line.part,
+	lnum = line.lnum,
+	text = line.str,
+	offset = string.len(prefix),
 })
 
-@for_every_root_node_send_did_open_to_lsp_server+=
-if not filename then
-	filename = vim.api.nvim_buf_get_name(0)
-end
-local parendir = vim.fn.fnamemodify(filename, ":p:h")
-for name, section in pairs(sections) do
-	if section.root then
-		local fn
-		@if_star_replace_with_current_filename
-		@otherwise_put_node_name
-		local lines = {}
-		local refs = {}
-		@output_generated_header
-		outputSections(lines, file, name, "", refs)
-		@get_text_document_uri
-		@save_document_refs
-		@send_did_open_to_lsp_server
-	end
-end
+@put_dummy_line_in_reverse_lookup+=
+table.insert(genmeta[name], {})
+
+@get_text_document_uri+=
+local uri = string.lower(vim.uri_from_fname(fn))
 
 @send_did_open_to_lsp_server+=
 local params = {
@@ -308,11 +228,82 @@ local params = {
 }
 client.notify('textDocument/didOpen', params)
 
-@script_variables+=
-local buffer_offset
+@retrieve_lines_from_this_buffer+=
+local assembly_filename, buffer_name = unpack(bufaddress[buf])
+local lines = bufcontent[assembly_filename][buffer_name]
 
-@set_cur_buffer_offset_assembled+=
-buffer_offset = offset[fn] - 1
+@apply_modifications_to_lines_of_buffer+=
+for _=firstline+1,lastline do
+	table.remove(lines, firstline+1)
+end
 
-@set_cur_buffer_offset_none+=
-buffer_offset = 0
+local changed = vim.api.nvim_buf_get_lines(buf, firstline, new_lastline, true)
+for _, line in ipairs(changed) do
+	table.insert(lines, firstline+1, line)
+end
+
+@if_assembly_doesnt_match_move_lines_from_assembly+=
+if curassembly ~= assembly_filename then
+	local bufname = vim.api.nvim_buf_get_name(buf)
+	bufcontent[assembly_filename][bufname] = nil
+
+	if not bufcontent[assembly_filename] then
+		@glob_all_links
+		@foreach_part_append_them_to_assembled
+	end
+
+	@put_lines_from_current_buffer_into_assembly
+	@save_bufaddress_for_current_buffer
+end
+
+@for_every_root_node_send_content_to_lsp_server+=
+local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
+for name, section in pairs(sections) do
+	if section.root then
+		local fn
+		@if_star_replace_with_current_filename
+		@otherwise_put_node_name
+		local lines = {}
+		@get_text_document_uri
+		@init_reverse_lookup
+		@output_generated_header
+		outputSections(assembly_filename, lines, uri, name, "")
+		@send_new_content_to_lsp_server
+	end
+end
+
+
+@output_generated_header+=
+if string.match(fn, "lua$") then
+	local relname
+	if filename then
+		relname = filename
+	else
+		relname = vim.api.nvim_buf_get_name(0)
+	end
+	relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
+	table.insert(lines, "-- Generated from " .. relname .. " using ntangle.nvim")
+	@put_dummy_line_in_reverse_lookup
+elseif string.match(fn, "vim$") then
+	local relname
+	if filename then
+		relname = filename
+	else
+		relname = vim.api.nvim_buf_get_name(0)
+	end
+	relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
+	table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
+	@put_dummy_line_in_reverse_lookup
+end
+
+@send_new_content_to_lsp_server+=
+client.notify("textDocument/didChange", {
+	textDocument = {
+	  uri = uri;
+	  version = changedtick;
+	};
+	contentChanges = { {
+		text = table.concat(lines, "\n")
+	} }
+})
+
