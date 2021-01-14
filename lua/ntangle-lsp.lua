@@ -1,4 +1,4 @@
--- Generated from border_window.lua.tl, contextmenu.lua.tl, debug.lua.tl, hover.lua.tl, init_client.lua.tl, ntangle-lsp.lua.tl, parse.lua.tl, publish_diagnostics.lua.tl, send_changes.lua.tl using ntangle.nvim
+-- Generated from border_window.lua.tl, contextmenu.lua.tl, debug.lua.tl, definition.lua.tl, hover.lua.tl, init_client.lua.tl, ntangle-lsp.lua.tl, parse.lua.tl, publish_diagnostics.lua.tl, send_changes.lua.tl using ntangle.nvim
 require("linkedlist")
 
 local contextmenu_contextmenu
@@ -201,6 +201,63 @@ function debug_array(l)
 		print(i .. ": " .. vim.inspect(li))
 	end
 end
+local function definition()
+	local pos, candidates = get_candidates_position()
+
+	local function action(sel)
+		local params = make_position_params(pos, sel)
+		local buf = vim.api.nvim_get_current_buf()
+		buf_request(buf, 'textDocument/definition', params)
+	end
+
+	if #candidates > 1 then
+		contextmenu_open(candidates,
+			function(sel) 
+				action(sel)
+			end
+		)
+	else
+		action(1)
+	end
+	
+end
+
+local function make_location_handler(buf)
+	local uri = string.lower(vim.uri_from_bufnr(buf))
+	
+	return function(_, method, result)
+		local converted = {}
+		if not vim.tbl_islist(result) then result = { result } end
+
+		for _, r in ipairs(result) do
+			if document_lookup[string.lower(r.uri)] then
+				local remote_uri = string.lower(r.uri)
+				local buf, refs = unpack(document_lookup[remote_uri])
+				
+				local offset_start, new_lnum_start = unpack(refs[r.range["start"].line+1])
+				local offset_end, new_lnum_end = unpack(refs[r.range["end"].line+1])
+				
+				r.range["start"].character = r.range["start"].character - offset_start
+				r.range["end"].character = r.range["end"].character - offset_end
+				
+				r.range["start"].line = new_lnum_start-1
+				r.range["end"].line = new_lnum_end-1
+				
+				r.uri = vim.uri_from_bufnr(buf)
+				
+			end
+		end
+
+		vim.lsp.util.jump_to_location(result[1])
+		
+		if #result > 1 then
+			vim.lsp.util.set_qflist(vim.lsp.util.locations_to_items(result))
+			vim.api.nvim_command("copen")
+			vim.api.nvim_command("wincmd p")
+		end
+	end
+end
+
 function buf_request(buf, method, params, handler)
 	local client_id = active_clients[buf]
 	local client = vim.lsp.get_client_by_id(client_id)
@@ -278,6 +335,8 @@ local function start(lang)
 			cmd = { "clangd" },
 			root_dir = root_dir,
 			handlers = {
+				["textDocument/definition"] = make_location_handler(bufnr),
+				
 				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(bufnr),
 				
 				-- ["textDocument/definition"] = make_location_handler(bufnr),
@@ -773,6 +832,9 @@ function outputSections(lines, file, name, prefix, refs)
 end
 
 return {
+definition = definition,
+make_location_handler = make_location_handler,
+
 hover = hover,
 
 start = start,
