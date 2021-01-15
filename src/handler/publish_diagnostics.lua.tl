@@ -37,11 +37,11 @@ diag.range["end"].line = meta[line_end_gen].lnum-1
 
 @uri_of_current_buffer+=
 new_params.uri = vim.uri_from_bufnr(0)
+new_params.diagnostics = {}
 
 @build_params_structure_to_pass_to_publish_diagnostics_if_current_buffer+=
-new_params.diagnostics = new_params.diagnostics or {}
 local part = meta[line_start_gen].part
-if part == vim.api.nvim_buf_get_name(0) then
+if part == vim.uri_from_bufnr(0) then
 	table.insert(new_params.diagnostics, diag)
 end
 

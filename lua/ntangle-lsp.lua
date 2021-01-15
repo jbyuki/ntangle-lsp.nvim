@@ -139,7 +139,7 @@ end
 local function buf_attach()
 	local client_id = client_clangd
 	assert(client_id, "No active clangd client!")
-	local bufnr = vim.fn.bufnr(0)
+	local bufnr = vim.fn.bufnr()
 	
 	vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
 	vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
@@ -493,6 +493,7 @@ function make_on_publish_diagnostics()
 		
 		local new_params = {}
 		new_params.uri = vim.uri_from_bufnr(0)
+		new_params.diagnostics = {}
 		
 		for _, diag in ipairs(params.diagnostics) do
 			local line_start_gen = diag.range["start"].line+1
@@ -507,9 +508,8 @@ function make_on_publish_diagnostics()
 			diag.range["start"].line = meta[line_start_gen].lnum-1
 			diag.range["end"].line = meta[line_end_gen].lnum-1
 			
-			new_params.diagnostics = new_params.diagnostics or {}
 			local part = meta[line_start_gen].part
-			if part == vim.api.nvim_buf_get_name(0) then
+			if part == vim.uri_from_bufnr(0) then
 				table.insert(new_params.diagnostics, diag)
 			end
 			
@@ -525,8 +525,8 @@ function attach_to_buf(buf, client_id, language_id)
 
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
-			local assembly_filename, buffer_name = unpack(bufaddress[buf])
-			local lines = bufcontent[assembly_filename][buffer_name]
+			local assembly_filename, uri = unpack(bufaddress[buf])
+			local lines = bufcontent[assembly_filename][uri]
 			
 			for _=firstline+1,lastline do
 				table.remove(lines, firstline+1)
@@ -551,7 +551,7 @@ function attach_to_buf(buf, client_id, language_id)
 				local relname = vim.fn.fnamemodify(curassembly, ":h")
 				local assname = vim.fn.fnamemodify(curassembly, ":t")
 				local parent = vim.fn.fnamemodify(bufname, ":h")
-				assembly_filename = parent .. "/" .. relname .. "/tangle/" .. assname .. "." .. extname
+				assembly_filename = parent .. "/" .. relname .. "/" .. assname .. "." .. extname
 				
 			end
 			
@@ -561,8 +561,8 @@ function attach_to_buf(buf, client_id, language_id)
 			
 
 			if curassembly ~= assembly_filename then
-				local bufname = vim.api.nvim_buf_get_name(buf)
-				bufcontent[assembly_filename][bufname] = nil
+				local uri = vim.uri_from_bufnr(buf)
+				bufcontent[assembly_filename][uri] = nil
 			
 				if not bufcontent[assembly_filename] then
 					local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
@@ -579,7 +579,8 @@ function attach_to_buf(buf, client_id, language_id)
 							local origin_path = f:read("*line")
 							f:close()
 							
-							if origin_path ~= bufname and not bufcontent[assembly_filename][origin_path] then
+							local uri = vim.uri_from_fname(origin_path)
+							if origin_path ~= bufname and not bufcontent[assembly_filename][uri] then
 								local partlines = {}
 								local f = io.open(origin_path, "r")
 								if f then
@@ -594,7 +595,7 @@ function attach_to_buf(buf, client_id, language_id)
 									end
 									f:close()
 								end
-								bufcontent[assembly_filename][origin_path] = partlines
+								bufcontent[assembly_filename][uri] = partlines
 								
 							end
 						end
@@ -602,10 +603,11 @@ function attach_to_buf(buf, client_id, language_id)
 					
 				end
 			
-				local bufname = vim.api.nvim_buf_get_name(buf)
-				bufcontent[assembly_filename][bufname] = lines
+				local uri = vim.uri_from_bufnr(buf)
+				bufcontent[assembly_filename][uri] = lines
 				
-				bufaddress[buf] = { assembly_filename, bufname }
+				local uri = vim.uri_from_bufnr(buf)
+				bufaddress[buf] = { assembly_filename, uri }
 				
 			end
 			
@@ -696,7 +698,7 @@ function attach_to_buf(buf, client_id, language_id)
 			local relname = vim.fn.fnamemodify(curassembly, ":h")
 			local assname = vim.fn.fnamemodify(curassembly, ":t")
 			local parent = vim.fn.fnamemodify(bufname, ":h")
-			assembly_filename = parent .. "/" .. relname .. "/tangle/" .. assname .. "." .. extname
+			assembly_filename = parent .. "/" .. relname .. "/" .. assname .. "." .. extname
 			
 		end
 		
@@ -720,7 +722,8 @@ function attach_to_buf(buf, client_id, language_id)
 					local origin_path = f:read("*line")
 					f:close()
 					
-					if origin_path ~= bufname and not bufcontent[assembly_filename][origin_path] then
+					local uri = vim.uri_from_fname(origin_path)
+					if origin_path ~= bufname and not bufcontent[assembly_filename][uri] then
 						local partlines = {}
 						local f = io.open(origin_path, "r")
 						if f then
@@ -735,7 +738,7 @@ function attach_to_buf(buf, client_id, language_id)
 							end
 							f:close()
 						end
-						bufcontent[assembly_filename][origin_path] = partlines
+						bufcontent[assembly_filename][uri] = partlines
 						
 					end
 				end
@@ -743,10 +746,11 @@ function attach_to_buf(buf, client_id, language_id)
 			
 		end
 
-		local bufname = vim.api.nvim_buf_get_name(buf)
-		bufcontent[assembly_filename][bufname] = lines
+		local uri = vim.uri_from_bufnr(buf)
+		bufcontent[assembly_filename][uri] = lines
 		
-		bufaddress[buf] = { assembly_filename, bufname }
+		local uri = vim.uri_from_bufnr(buf)
+		bufaddress[buf] = { assembly_filename, uri }
 		
 
 		sections = {}

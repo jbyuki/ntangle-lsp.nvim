@@ -13,7 +13,7 @@ end
 buf_attach = buf_attach,
 
 @get_current_buffer_number+=
-local bufnr = vim.fn.bufnr(0)
+local bufnr = vim.fn.bufnr()
 
 @define_some_general_keybindings+=
 vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})

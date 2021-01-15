@@ -74,7 +74,7 @@ local extname = vim.fn.fnamemodify(bufname, ":e:e")
 local relname = vim.fn.fnamemodify(curassembly, ":h")
 local assname = vim.fn.fnamemodify(curassembly, ":t")
 local parent = vim.fn.fnamemodify(bufname, ":h")
-assembly_filename = parent .. "/" .. relname .. "/tangle/" .. assname .. "." .. extname
+assembly_filename = parent .. "/" .. relname .. "/" .. assname .. "." .. extname
 
 @if_no_assembly_replace_with_current_filename+=
 if not curassembly then
@@ -92,7 +92,8 @@ local bufaddress = {}
 local bufcontent = {}
 
 @save_bufaddress_for_current_buffer+=
-bufaddress[buf] = { assembly_filename, bufname }
+local uri = vim.uri_from_bufnr(buf)
+bufaddress[buf] = { assembly_filename, uri }
 
 @foreach_part_append_them_to_assembled+=
 bufcontent[assembly_filename] = {}
@@ -101,7 +102,8 @@ for _, part in ipairs(parts) do
 	if part ~= "" then
 		local origin_path
 		@read_link_from_link_file
-		if origin_path ~= bufname and not bufcontent[assembly_filename][origin_path] then
+		local uri = vim.uri_from_fname(origin_path)
+		if origin_path ~= bufname and not bufcontent[assembly_filename][uri] then
 			@append_lines_to_bufcontent_for_part
 		end
 	end
@@ -127,11 +129,11 @@ if f then
 	end
 	f:close()
 end
-bufcontent[assembly_filename][origin_path] = partlines
+bufcontent[assembly_filename][uri] = partlines
 
 @put_lines_from_current_buffer_into_assembly+=
-local bufname = vim.api.nvim_buf_get_name(buf)
-bufcontent[assembly_filename][bufname] = lines
+local uri = vim.uri_from_bufnr(buf)
+bufcontent[assembly_filename][uri] = lines
 
 @parse_tangle_from_lines+=
 parse(bufcontent[assembly_filename])
@@ -229,8 +231,8 @@ local params = {
 client.notify('textDocument/didOpen', params)
 
 @retrieve_lines_from_this_buffer+=
-local assembly_filename, buffer_name = unpack(bufaddress[buf])
-local lines = bufcontent[assembly_filename][buffer_name]
+local assembly_filename, uri = unpack(bufaddress[buf])
+local lines = bufcontent[assembly_filename][uri]
 
 @apply_modifications_to_lines_of_buffer+=
 for _=firstline+1,lastline do
@@ -244,8 +246,8 @@ end
 
 @if_assembly_doesnt_match_move_lines_from_assembly+=
 if curassembly ~= assembly_filename then
-	local bufname = vim.api.nvim_buf_get_name(buf)
-	bufcontent[assembly_filename][bufname] = nil
+	local uri = vim.uri_from_bufnr(buf)
+	bufcontent[assembly_filename][uri] = nil
 
 	if not bufcontent[assembly_filename] then
 		@glob_all_links
