@@ -4,8 +4,7 @@ local function definition()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/definition', params)
 	end
 
@@ -13,27 +12,25 @@ local function definition()
 end
 
 @client_handlers+=
-["textDocument/definition"] = make_location_handler(bufnr),
+["textDocument/definition"] = make_location_handler(),
 
 @export_symbols+=
 definition = definition,
 make_location_handler = make_location_handler,
 
 @functions+=
-local function make_location_handler(buf)
-	-- @get_uri_of_buffer
-	-- return function(_, method, result)
-		-- local converted = {}
-		-- if not vim.tbl_islist(result) then result = { result } end
--- 
-		-- for _, r in ipairs(result) do
-			-- if document_lookup[string.lower(r.uri)] then
+local function make_location_handler()
+	return function(_, method, result)
+		if not vim.tbl_islist(result) then result = { result } end
+
+		for _, r in ipairs(result) do
+			if genmeta[r.uri] then
 				-- @convert_uri_and_location
-			-- end
-		-- end
--- 
-		-- @call_builtin_on_location_handler_with_modified_params
-	-- end
+			end
+		end
+
+		@call_builtin_on_location_handler_with_modified_params
+	end
 end
 
 @convert_uri_and_location+=

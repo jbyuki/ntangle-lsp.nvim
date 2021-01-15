@@ -24,7 +24,6 @@ local function hover()
 
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
-		local buf = vim.api.nvim_get_current_buf()
 		buf_request('textDocument/hover', params)
 	end
 

@@ -250,8 +250,7 @@ local function definition()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/definition', params)
 	end
 
@@ -271,20 +270,24 @@ local function definition()
 	
 end
 
-local function make_location_handler(buf)
-	-- @get_uri_of_buffer
-	-- return function(_, method, result)
-		-- local converted = {}
-		-- if not vim.tbl_islist(result) then result = { result } end
--- 
-		-- for _, r in ipairs(result) do
-			-- if document_lookup[string.lower(r.uri)] then
+local function make_location_handler()
+	return function(_, method, result)
+		if not vim.tbl_islist(result) then result = { result } end
+
+		for _, r in ipairs(result) do
+			if genmeta[r.uri] then
 				-- @convert_uri_and_location
-			-- end
-		-- end
--- 
-		-- @call_builtin_on_location_handler_with_modified_params
-	-- end
+			end
+		end
+
+		vim.lsp.util.jump_to_location(result[1])
+		
+		if #result > 1 then
+			vim.lsp.util.set_qflist(vim.lsp.util.locations_to_items(result))
+			vim.api.nvim_command("copen")
+			vim.api.nvim_command("wincmd p")
+		end
+	end
 end
 
 function buf_request(method, params, handler)
@@ -303,7 +306,6 @@ local function hover()
 
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
-		local buf = vim.api.nvim_get_current_buf()
 		buf_request('textDocument/hover', params)
 	end
 
@@ -392,7 +394,7 @@ local function start(lang)
 			root_dir = ".",
 			handlers = {
 				["textDocument/declaration"] = make_location_handler(bufnr),
-				["textDocument/definition"] = make_location_handler(bufnr),
+				["textDocument/definition"] = make_location_handler(),
 				
 				["textDocument/implementation"] = make_location_handler(bufnr),
 				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(),
