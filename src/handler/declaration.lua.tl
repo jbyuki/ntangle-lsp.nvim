@@ -4,8 +4,7 @@ local function declaration()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/declaration', params)
 	end
 
@@ -16,4 +15,4 @@ end
 declaration = declaration,
 
 @client_handlers+=
-["textDocument/declaration"] = make_location_handler(bufnr),
+["textDocument/declaration"] = make_location_handler(),

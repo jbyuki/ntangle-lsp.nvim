@@ -4,8 +4,7 @@ local function implementation()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/implementation', params)
 	end
 
@@ -16,4 +15,4 @@ end
 implementation = implementation,
 
 @client_handlers+=
-["textDocument/implementation"] = make_location_handler(bufnr),
+["textDocument/implementation"] = make_location_handler(),

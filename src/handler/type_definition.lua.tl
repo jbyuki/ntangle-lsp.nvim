@@ -4,8 +4,7 @@ local function type_definition()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/typeDefinition', params)
 	end
 
@@ -16,4 +15,4 @@ end
 type_definition = type_definition,
 
 @client_handlers+=
-["textDocument/typeDefinition"] = make_location_handler(bufnr),
+["textDocument/typeDefinition"] = make_location_handler(),

@@ -225,8 +225,7 @@ local function declaration()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/declaration', params)
 	end
 
@@ -365,8 +364,7 @@ local function implementation()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/implementation', params)
 	end
 
@@ -393,13 +391,13 @@ local function start(lang)
 			cmd = { "clangd" },
 			root_dir = ".",
 			handlers = {
-				["textDocument/declaration"] = make_location_handler(bufnr),
+				["textDocument/declaration"] = make_location_handler(),
 				["textDocument/definition"] = make_location_handler(),
 				
-				["textDocument/implementation"] = make_location_handler(bufnr),
+				["textDocument/implementation"] = make_location_handler(),
 				["textDocument/publishDiagnostics"] = make_on_publish_diagnostics(),
 				
-				["textDocument/typeDefinition"] = make_location_handler(bufnr),
+				["textDocument/typeDefinition"] = make_location_handler(),
 				-- ["textDocument/definition"] = make_location_handler(bufnr),
 				-- ["textDocument/declaration"] = make_location_handler(bufnr),
 				-- ["textDocument/typeDefinition"] = make_location_handler(bufnr),
@@ -883,8 +881,7 @@ local function type_definition()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
-		local buf = vim.api.nvim_get_current_buf()
+		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/typeDefinition', params)
 	end
 
