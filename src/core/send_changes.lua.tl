@@ -6,6 +6,8 @@ local attach_to_buf
 function attach_to_buf(buf, client_id, language_id)
 	@get_client_from_id
 
+	@check_if_not_already_attached
+
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
 			@retrieve_lines_from_this_buffer
@@ -83,9 +85,10 @@ end
 
 @glob_all_links+=
 local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
-local assembly_root = vim.fn.fnamemodify(assembly_filename, ":r:r")
+local assembly_dir = vim.fn.fnamemodify(assembly_filename, ":h")
+local assembly_name = vim.fn.fnamemodify(assembly_filename, ":t:r:r")
 
-local parts = vim.split(vim.fn.glob(assembly_root .. ".*." .. extname), "\n")
+local parts = vim.split(vim.fn.glob(assembly_dir .. "/tangle/" .. assembly_name .. ".*." .. extname), "\n")
 
 @script_variables+=
 local bufaddress = {}
@@ -309,3 +312,12 @@ client.notify("textDocument/didChange", {
 	} }
 })
 
+@script_variables+=
+local attached = {}
+
+@check_if_not_already_attached+=
+if attached[buf] then
+	return
+end
+
+attached[buf] = true

@@ -15,6 +15,8 @@ local bufcontent = {}
 
 local genmeta = {}
 
+local attached = {}
+
 local sections = {}
 local curSection = nil
 
@@ -225,11 +227,15 @@ local function declaration()
 	local function action(sel)
 		local params = make_position_params(pos, sel)
 		local buf = vim.api.nvim_get_current_buf()
-		buf_request(buf, 'textDocument/declaration', params)
+		buf_request('textDocument/declaration', params)
 	end
 
 	if #candidates > 1 then
-		contextmenu_open(candidates,
+		local candidates_str = {}
+		for _, c in ipairs(candidates) do
+			table.insert(candidates_str, c.root_uri .. " " .. c.lnum)
+		end
+		contextmenu_open(candidates_str,
 			function(sel) 
 				action(sel)
 			end
@@ -237,6 +243,7 @@ local function declaration()
 	else
 		action(1)
 	end
+	
 end
 
 local function definition()
@@ -245,11 +252,15 @@ local function definition()
 	local function action(sel)
 		local params = make_position_params(pos, sel)
 		local buf = vim.api.nvim_get_current_buf()
-		buf_request(buf, 'textDocument/definition', params)
+		buf_request('textDocument/definition', params)
 	end
 
 	if #candidates > 1 then
-		contextmenu_open(candidates,
+		local candidates_str = {}
+		for _, c in ipairs(candidates) do
+			table.insert(candidates_str, c.root_uri .. " " .. c.lnum)
+		end
+		contextmenu_open(candidates_str,
 			function(sel) 
 				action(sel)
 			end
@@ -257,6 +268,7 @@ local function definition()
 	else
 		action(1)
 	end
+	
 end
 
 local function make_location_handler(buf)
@@ -275,11 +287,12 @@ local function make_location_handler(buf)
 	-- end
 end
 
-function buf_request(buf, method, params, handler)
-	local client_id = active_clients[buf]
+function buf_request(method, params, handler)
+	local client_id = client_clangd
 	local client = vim.lsp.get_client_by_id(client_id)
 	
 	if client.supports_method(method) then
+		local buf = vim.api.nvim_get_current_buf()
 		client.request(method, params, handler, buf)
 	end
 	
@@ -289,13 +302,17 @@ local function hover()
 	local pos, candidates = get_candidates_position()
 
 	local function action(sel)
-		local params = make_position_params(pos, sel)
+		local params = make_position_params(pos, candidates, sel)
 		local buf = vim.api.nvim_get_current_buf()
-		buf_request(buf, 'textDocument/hover', params)
+		buf_request('textDocument/hover', params)
 	end
 
 	if #candidates > 1 then
-		contextmenu_open(candidates,
+		local candidates_str = {}
+		for _, c in ipairs(candidates) do
+			table.insert(candidates_str, c.root_uri .. " " .. c.lnum)
+		end
+		contextmenu_open(candidates_str,
 			function(sel) 
 				action(sel)
 			end
@@ -303,25 +320,20 @@ local function hover()
 	else
 		action(1)
 	end
+	
 end
 
-function make_position_params(pos, sel)
+function make_position_params(pos, candidates, sel)
 	local row, col = unpack(pos)
-	local prefix_len, refs, lnum = unpack(buffer_lookup[row][sel])
-	lnum = lnum-1
-	local line = vim.api.nvim_buf_get_lines(0, row-1, row, true)[1]
-	col = vim.str_utfindex(line, col) + prefix_len
+	local c = candidates[sel]
+	local lnum = c.lnum-1
+	local line = vim.api.nvim_get_current_line()
+	col = vim.str_utfindex(line, col) + c.offset
 	
-	local section_uri
-	for uri, doc in pairs(document_lookup) do
-		local _, document_refs = unpack(doc)
-		if refs == document_refs then
-			section_uri = uri
-		end
-	end
+	local root_uri = c.root_uri
 	
 	return { 
-		textDocument = {uri = section_uri},
+		textDocument = {uri = root_uri},
 		position = {line = lnum, character = col},
 	}
 end
@@ -329,11 +341,19 @@ end
 function get_candidates_position()
 	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
 	
+	local uri = vim.uri_from_bufnr(0)
 	local candidates = {}
-	for _, c in ipairs(buffer_lookup[row]) do
-		local _, _, lnum = unpack(c)
-		print("candidate " .. lnum)
-		table.insert(candidates, "L" .. lnum)
+	for root_uri, meta in pairs(genmeta) do
+		for lnum, info in ipairs(meta) do
+			if info.part == uri and info.lnum == row then
+				table.insert(candidates, {
+					root_uri = root_uri,
+					lnum = lnum,
+					offset = info.offset,
+				})
+				
+			end
+		end
 	end
 	
 	return {row, col}, candidates
@@ -345,11 +365,15 @@ local function implementation()
 	local function action(sel)
 		local params = make_position_params(pos, sel)
 		local buf = vim.api.nvim_get_current_buf()
-		buf_request(buf, 'textDocument/implementation', params)
+		buf_request('textDocument/implementation', params)
 	end
 
 	if #candidates > 1 then
-		contextmenu_open(candidates,
+		local candidates_str = {}
+		for _, c in ipairs(candidates) do
+			table.insert(candidates_str, c.root_uri .. " " .. c.lnum)
+		end
+		contextmenu_open(candidates_str,
 			function(sel) 
 				action(sel)
 			end
@@ -357,6 +381,7 @@ local function implementation()
 	else
 		action(1)
 	end
+	
 end
 
 local function start(lang)
@@ -447,9 +472,6 @@ function parse(assembly_lines)
 			
 			elseif string.match(line, "^%s*@[^@]%S*%s*$") then
 				local _, _, prefix, name = string.find(line, "^(%s*)@(%S+)%s*$")
-				if name == nil then
-					print(line)
-				end
 				
 				-- @check_that_sections_is_not_empty
 				local l = { 
@@ -523,6 +545,12 @@ function attach_to_buf(buf, client_id, language_id)
 	assert(client, "Could not find client_id")
 	
 
+	if attached[buf] then
+		return
+	end
+	
+	attached[buf] = true
+
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
 			local assembly_filename, uri = unpack(bufaddress[buf])
@@ -566,9 +594,10 @@ function attach_to_buf(buf, client_id, language_id)
 			
 				if not bufcontent[assembly_filename] then
 					local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
-					local assembly_root = vim.fn.fnamemodify(assembly_filename, ":r:r")
+					local assembly_dir = vim.fn.fnamemodify(assembly_filename, ":h")
+					local assembly_name = vim.fn.fnamemodify(assembly_filename, ":t:r:r")
 					
-					local parts = vim.split(vim.fn.glob(assembly_root .. ".*." .. extname), "\n")
+					local parts = vim.split(vim.fn.glob(assembly_dir .. "/tangle/" .. assembly_name .. ".*." .. extname), "\n")
 					
 					bufcontent[assembly_filename] = {}
 					
@@ -709,9 +738,10 @@ function attach_to_buf(buf, client_id, language_id)
 
 		if not bufcontent[assembly_filename] then
 			local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
-			local assembly_root = vim.fn.fnamemodify(assembly_filename, ":r:r")
+			local assembly_dir = vim.fn.fnamemodify(assembly_filename, ":h")
+			local assembly_name = vim.fn.fnamemodify(assembly_filename, ":t:r:r")
 			
-			local parts = vim.split(vim.fn.glob(assembly_root .. ".*." .. extname), "\n")
+			local parts = vim.split(vim.fn.glob(assembly_dir .. "/tangle/" .. assembly_name .. ".*." .. extname), "\n")
 			
 			bufcontent[assembly_filename] = {}
 			
@@ -853,11 +883,15 @@ local function type_definition()
 	local function action(sel)
 		local params = make_position_params(pos, sel)
 		local buf = vim.api.nvim_get_current_buf()
-		buf_request(buf, 'textDocument/typeDefinition', params)
+		buf_request('textDocument/typeDefinition', params)
 	end
 
 	if #candidates > 1 then
-		contextmenu_open(candidates,
+		local candidates_str = {}
+		for _, c in ipairs(candidates) do
+			table.insert(candidates_str, c.root_uri .. " " .. c.lnum)
+		end
+		contextmenu_open(candidates_str,
 			function(sel) 
 				action(sel)
 			end
@@ -865,6 +899,7 @@ local function type_definition()
 	else
 		action(1)
 	end
+	
 end
 
 return {

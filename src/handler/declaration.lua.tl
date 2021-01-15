@@ -6,7 +6,7 @@ local function declaration()
 	local function action(sel)
 		local params = make_position_params(pos, sel)
 		local buf = vim.api.nvim_get_current_buf()
-		buf_request(buf, 'textDocument/declaration', params)
+		buf_request('textDocument/declaration', params)
 	end
 
 	@do_action_and_open_context_menu_if_multiple_choices

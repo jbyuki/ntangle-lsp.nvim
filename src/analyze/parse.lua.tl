@@ -95,9 +95,6 @@ elseif string.match(line, "^%s*@[^@]%S*%s*$") then
 
 @get_reference_name+=
 local _, _, prefix, name = string.find(line, "^(%s*)@(%S+)%s*$")
-if name == nil then
-	print(line)
-end
 
 @check_that_sections_is_not_empty+=
 if sections[name] then
