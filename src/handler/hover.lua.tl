@@ -70,7 +70,7 @@ end
 local row, col = unpack(vim.api.nvim_win_get_cursor(0))
 
 @get_candidates_positions+=
-local uri = vim.uri_from_bufnr(0)
+local uri = get_uri(0)
 local candidates = {}
 for root_uri, meta in pairs(genmeta) do
 	for lnum, info in ipairs(meta) do

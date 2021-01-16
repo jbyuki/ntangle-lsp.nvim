@@ -13,6 +13,8 @@ local client_clangd
 local bufaddress = {}
 local bufcontent = {}
 
+sent_buffer = {}
+
 local genmeta = {}
 
 local attached = {}
@@ -48,6 +50,8 @@ local parse
 local make_on_publish_diagnostics
 
 local attach_to_buf 
+
+local get_uri, get_uri_from_fn
 
 local outputSections
 
@@ -342,7 +346,7 @@ end
 function get_candidates_position()
 	local row, col = unpack(vim.api.nvim_win_get_cursor(0))
 	
-	local uri = vim.uri_from_bufnr(0)
+	local uri = get_uri(0)
 	local candidates = {}
 	for root_uri, meta in pairs(genmeta) do
 		for lnum, info in ipairs(meta) do
@@ -389,7 +393,7 @@ local function start(lang)
 		vim.lsp.set_log_level("debug")
 		local client_id = vim.lsp.start_client {
 			cmd = { "clangd" },
-			root_dir = ".",
+			root_dir = "C:/Users/i354324/",
 			handlers = {
 				["textDocument/declaration"] = make_location_handler(),
 				["textDocument/definition"] = make_location_handler(),
@@ -514,7 +518,7 @@ function make_on_publish_diagnostics()
 		local meta = genmeta[params.uri]
 		
 		local new_params = {}
-		new_params.uri = vim.uri_from_bufnr(0)
+		new_params.uri = get_uri(0)
 		new_params.diagnostics = {}
 		
 		for _, diag in ipairs(params.diagnostics) do
@@ -531,7 +535,7 @@ function make_on_publish_diagnostics()
 			diag.range["end"].line = meta[line_end_gen].lnum-1
 			
 			local part = meta[line_start_gen].part
-			if part == vim.uri_from_bufnr(0) then
+			if part == get_uri(0) then
 				table.insert(new_params.diagnostics, diag)
 			end
 			
@@ -589,7 +593,7 @@ function attach_to_buf(buf, client_id, language_id)
 			
 
 			if curassembly ~= assembly_filename then
-				local uri = vim.uri_from_bufnr(buf)
+				local uri = get_uri(buf)
 				bufcontent[assembly_filename][uri] = nil
 			
 				if not bufcontent[assembly_filename] then
@@ -608,7 +612,7 @@ function attach_to_buf(buf, client_id, language_id)
 							local origin_path = f:read("*line")
 							f:close()
 							
-							local uri = vim.uri_from_fname(origin_path)
+							local uri = get_uri_from_fn(origin_path)
 							if origin_path ~= bufname and not bufcontent[assembly_filename][uri] then
 								local partlines = {}
 								local f = io.open(origin_path, "r")
@@ -632,10 +636,10 @@ function attach_to_buf(buf, client_id, language_id)
 					
 				end
 			
-				local uri = vim.uri_from_bufnr(buf)
+				local uri = get_uri(buf)
 				bufcontent[assembly_filename][uri] = lines
 				
-				local uri = vim.uri_from_bufnr(buf)
+				local uri = get_uri(buf)
 				bufaddress[buf] = { assembly_filename, uri }
 				
 			end
@@ -644,6 +648,7 @@ function attach_to_buf(buf, client_id, language_id)
 			sections = {}
 			curSection = nil
 			
+			sent_buffer = bufcontent[assembly_filename]
 			parse(bufcontent[assembly_filename])
 			
 
@@ -664,7 +669,7 @@ function attach_to_buf(buf, client_id, language_id)
 					end
 					
 					local lines = {}
-					local uri = string.lower(vim.uri_from_fname(fn))
+					local uri = get_uri_from_fn(fn)
 					
 					genmeta[uri] = {}
 					
@@ -752,7 +757,7 @@ function attach_to_buf(buf, client_id, language_id)
 					local origin_path = f:read("*line")
 					f:close()
 					
-					local uri = vim.uri_from_fname(origin_path)
+					local uri = get_uri_from_fn(origin_path)
 					if origin_path ~= bufname and not bufcontent[assembly_filename][uri] then
 						local partlines = {}
 						local f = io.open(origin_path, "r")
@@ -776,16 +781,17 @@ function attach_to_buf(buf, client_id, language_id)
 			
 		end
 
-		local uri = vim.uri_from_bufnr(buf)
+		local uri = get_uri(buf)
 		bufcontent[assembly_filename][uri] = lines
 		
-		local uri = vim.uri_from_bufnr(buf)
+		local uri = get_uri(buf)
 		bufaddress[buf] = { assembly_filename, uri }
 		
 
 		sections = {}
 		curSection = nil
 		
+		sent_buffer = bufcontent[assembly_filename]
 		parse(bufcontent[assembly_filename])
 		
 		local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
@@ -805,7 +811,7 @@ function attach_to_buf(buf, client_id, language_id)
 				end
 				
 				local lines = {}
-				local uri = string.lower(vim.uri_from_fname(fn))
+				local uri = get_uri_from_fn(fn)
 				
 				genmeta[uri] = {}
 				
@@ -849,6 +855,14 @@ function attach_to_buf(buf, client_id, language_id)
 		end
 		
 	end)
+end
+
+function get_uri(buf)
+	return string.lower(vim.uri_from_bufnr(buf))
+end
+
+function get_uri_from_fn(fn)
+	return string.lower(vim.uri_from_fname(fn))
 end
 
 function outputSections(assembly_filename, lines, uri, name, prefix)

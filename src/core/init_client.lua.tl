@@ -14,7 +14,7 @@ start = start,
 @create_lsp_client_with_clangd+=
 local client_id = vim.lsp.start_client {
 	cmd = { "clangd" },
-	root_dir = ".",
+	root_dir = "C:/Users/i354324/",
 	handlers = {
 		@client_handlers
 		-- ["textDocument/definition"] = make_location_handler(bufnr),

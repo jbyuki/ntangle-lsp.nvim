@@ -94,8 +94,20 @@ local parts = vim.split(vim.fn.glob(assembly_dir .. "/tangle/" .. assembly_name 
 local bufaddress = {}
 local bufcontent = {}
 
+@declare_functions+=
+local get_uri, get_uri_from_fn
+
+@functions+=
+function get_uri(buf)
+	return string.lower(vim.uri_from_bufnr(buf))
+end
+
+function get_uri_from_fn(fn)
+	return string.lower(vim.uri_from_fname(fn))
+end
+
 @save_bufaddress_for_current_buffer+=
-local uri = vim.uri_from_bufnr(buf)
+local uri = get_uri(buf)
 bufaddress[buf] = { assembly_filename, uri }
 
 @foreach_part_append_them_to_assembled+=
@@ -105,7 +117,7 @@ for _, part in ipairs(parts) do
 	if part ~= "" then
 		local origin_path
 		@read_link_from_link_file
-		local uri = vim.uri_from_fname(origin_path)
+		local uri = get_uri_from_fn(origin_path)
 		if origin_path ~= bufname and not bufcontent[assembly_filename][uri] then
 			@append_lines_to_bufcontent_for_part
 		end
@@ -135,10 +147,14 @@ end
 bufcontent[assembly_filename][uri] = partlines
 
 @put_lines_from_current_buffer_into_assembly+=
-local uri = vim.uri_from_bufnr(buf)
+local uri = get_uri(buf)
 bufcontent[assembly_filename][uri] = lines
 
+@script_variables+=
+sent_buffer = {}
+
 @parse_tangle_from_lines+=
+sent_buffer = bufcontent[assembly_filename]
 parse(bufcontent[assembly_filename])
 
 @for_every_root_node_send_did_open_to_lsp_server+=
@@ -219,7 +235,7 @@ table.insert(genmeta[uri], {
 table.insert(genmeta[name], {})
 
 @get_text_document_uri+=
-local uri = string.lower(vim.uri_from_fname(fn))
+local uri = get_uri_from_fn(fn)
 
 @send_did_open_to_lsp_server+=
 local params = {
@@ -249,7 +265,7 @@ end
 
 @if_assembly_doesnt_match_move_lines_from_assembly+=
 if curassembly ~= assembly_filename then
-	local uri = vim.uri_from_bufnr(buf)
+	local uri = get_uri(buf)
 	bufcontent[assembly_filename][uri] = nil
 
 	if not bufcontent[assembly_filename] then
