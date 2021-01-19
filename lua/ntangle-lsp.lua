@@ -13,9 +13,9 @@ local client_clangd
 local bufaddress = {}
 local bufcontent = {}
 
-sent_buffer = {}
-
 local genmeta = {}
+
+last_sent = {}
 
 local attached = {}
 
@@ -558,16 +558,8 @@ function attach_to_buf(buf, client_id, language_id)
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
 			local assembly_filename, uri = unpack(bufaddress[buf])
-			local lines = bufcontent[assembly_filename][uri]
 			
-			for _=firstline+1,lastline do
-				table.remove(lines, firstline+1)
-			end
-			
-			local changed = vim.api.nvim_buf_get_lines(buf, firstline, new_lastline, true)
-			for _, line in ipairs(changed) do
-				table.insert(lines, firstline+1, line)
-			end
+			local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
 			
 
 			local curassembly
@@ -648,7 +640,6 @@ function attach_to_buf(buf, client_id, language_id)
 			sections = {}
 			curSection = nil
 			
-			sent_buffer = bufcontent[assembly_filename]
 			parse(bufcontent[assembly_filename])
 			
 
@@ -698,6 +689,7 @@ function attach_to_buf(buf, client_id, language_id)
 					end
 					
 					outputSections(assembly_filename, lines, uri, name, "")
+					last_sent[uri] = lines
 					client.notify("textDocument/didChange", {
 						textDocument = {
 						  uri = uri;
@@ -791,7 +783,6 @@ function attach_to_buf(buf, client_id, language_id)
 		sections = {}
 		curSection = nil
 		
-		sent_buffer = bufcontent[assembly_filename]
 		parse(bufcontent[assembly_filename])
 		
 		local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")

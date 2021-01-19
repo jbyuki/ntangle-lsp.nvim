@@ -10,7 +10,7 @@ function attach_to_buf(buf, client_id, language_id)
 
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
-			@retrieve_lines_from_this_buffer
+			@retrieve_current_buffer_info
 			@apply_modifications_to_lines_of_buffer
 
 			local curassembly
@@ -150,11 +150,7 @@ bufcontent[assembly_filename][uri] = partlines
 local uri = get_uri(buf)
 bufcontent[assembly_filename][uri] = lines
 
-@script_variables+=
-sent_buffer = {}
-
 @parse_tangle_from_lines+=
-sent_buffer = bufcontent[assembly_filename]
 parse(bufcontent[assembly_filename])
 
 @for_every_root_node_send_did_open_to_lsp_server+=
@@ -249,19 +245,11 @@ local params = {
 }
 client.notify('textDocument/didOpen', params)
 
-@retrieve_lines_from_this_buffer+=
+@retrieve_current_buffer_info+=
 local assembly_filename, uri = unpack(bufaddress[buf])
-local lines = bufcontent[assembly_filename][uri]
 
 @apply_modifications_to_lines_of_buffer+=
-for _=firstline+1,lastline do
-	table.remove(lines, firstline+1)
-end
-
-local changed = vim.api.nvim_buf_get_lines(buf, firstline, new_lastline, true)
-for _, line in ipairs(changed) do
-	table.insert(lines, firstline+1, line)
-end
+local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
 
 @if_assembly_doesnt_match_move_lines_from_assembly+=
 if curassembly ~= assembly_filename then
@@ -317,7 +305,11 @@ elseif string.match(fn, "vim$") then
 	@put_dummy_line_in_reverse_lookup
 end
 
+@script_variables+=
+last_sent = {}
+
 @send_new_content_to_lsp_server+=
+last_sent[uri] = lines
 client.notify("textDocument/didChange", {
 	textDocument = {
 	  uri = uri;
