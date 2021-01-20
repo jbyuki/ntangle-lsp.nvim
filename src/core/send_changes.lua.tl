@@ -66,6 +66,9 @@ end
 
 @extract_assembly_name+=
 local name = string.match(top, "^##(%S*)%s*$")
+if not name or string.len(name) == 0 then
+	return
+end
 
 @set_as_current_assembly+=
 curassembly = name
@@ -254,6 +257,7 @@ local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
 @if_assembly_doesnt_match_move_lines_from_assembly+=
 if curassembly ~= assembly_filename then
 	local uri = get_uri(buf)
+	bufcontent[assembly_filename] = bufcontent[assembly_filename] or {}
 	bufcontent[assembly_filename][uri] = nil
 
 	if not bufcontent[assembly_filename] then

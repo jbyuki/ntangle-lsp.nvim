@@ -571,6 +571,9 @@ function attach_to_buf(buf, client_id, language_id)
 			local top = lines[1] or ""
 			if string.match(top, "^##%S*%s*$") then
 				local name = string.match(top, "^##(%S*)%s*$")
+				if not name or string.len(name) == 0 then
+					return
+				end
 				
 				curassembly = name
 				
@@ -590,6 +593,7 @@ function attach_to_buf(buf, client_id, language_id)
 
 			if curassembly ~= assembly_filename then
 				local uri = get_uri(buf)
+				bufcontent[assembly_filename] = bufcontent[assembly_filename] or {}
 				bufcontent[assembly_filename][uri] = nil
 			
 				if not bufcontent[assembly_filename] then
@@ -720,6 +724,9 @@ function attach_to_buf(buf, client_id, language_id)
 		local top = lines[1] or ""
 		if string.match(top, "^##%S*%s*$") then
 			local name = string.match(top, "^##(%S*)%s*$")
+			if not name or string.len(name) == 0 then
+				return
+			end
 			
 			curassembly = name
 			
