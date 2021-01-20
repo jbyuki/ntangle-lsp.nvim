@@ -491,6 +491,7 @@ function parse(assembly_lines)
 				
 			
 			elseif string.match(line, "^##%S*%s*$") then
+			
 			else
 				if sections[name] then
 					hasSection = true
@@ -504,6 +505,9 @@ function parse(assembly_lines)
 				l.lnum = lnum
 				l.part = part
 				
+				if not curSection then
+					return
+				end
 				linkedlist.push_back(curSection.lines, l)
 				
 			end
