@@ -91,6 +91,7 @@ elseif string.match(line, "^%s*@[^@]%S*%s*$") then
 	@get_reference_name
 	-- @check_that_sections_is_not_empty
 	@create_line_reference
+	@quit_if_no_current_section
 	@add_line_to_section
 
 @get_reference_name+=

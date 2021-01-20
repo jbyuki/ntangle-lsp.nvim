@@ -487,6 +487,9 @@ function parse(assembly_lines)
 				l.lnum = lnum
 				l.part = part
 				
+				if not curSection then
+					return
+				end
 				linkedlist.push_back(curSection.lines, l)
 				
 			
