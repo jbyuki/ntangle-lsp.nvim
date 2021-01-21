@@ -11,6 +11,7 @@ function contextmenu_open(candidates, callback)
 	@attach_keymap_to_context_menu
 	@setup_context_menu_window
 	@save_contextmenu_callback
+	@attach_autocommand_to_close_border_window
 end
 
 @compute_max_width_for_context_menu+=
@@ -50,6 +51,9 @@ fill_border(borderbuf, border_opts, false, "")
 
 local borderwin = vim.api.nvim_open_win(borderbuf, false, border_opts)
 
+@attach_autocommand_to_close_border_window+=
+vim.api.nvim_command("autocmd WinLeave * ++once lua vim.api.nvim_win_close(" .. borderwin .. ", false)")
+
 @put_text_in_context_menu+=
 vim.api.nvim_buf_set_lines(buf, 0, -1, true, candidates)
 
@@ -71,6 +75,9 @@ local function select_contextmenu()
 		contextmenu_contextmenu = nil
 	end
 end
+
+@export_symbols+=
+select_contextmenu = select_contextmenu,
 
 @script_variables+=
 local contextmenu_win

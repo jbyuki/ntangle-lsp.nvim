@@ -12,7 +12,7 @@ function make_on_publish_diagnostics()
 			@convert_line_number_tangled_line_numbers
 			@build_params_structure_to_pass_to_publish_diagnostics_if_current_buffer
 		end
-		@call_builtin_on_publish_diagnostics_with_modified_params
+		-- @call_builtin_on_publish_diagnostics_with_modified_params
 	end
 end
 

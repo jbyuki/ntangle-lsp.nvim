@@ -205,6 +205,8 @@ function contextmenu_open(candidates, callback)
 	vim.api.nvim_set_current_win(contextmenu_win)
 	contextmenu_contextmenu = callback
 	
+	vim.api.nvim_command("autocmd WinLeave * ++once lua vim.api.nvim_win_close(" .. borderwin .. ", false)")
+	
 end
 
 local function select_contextmenu()
@@ -547,7 +549,7 @@ function make_on_publish_diagnostics()
 			end
 			
 		end
-		vim.lsp.diagnostic.on_publish_diagnostics(_, method, new_params, client_id)
+		-- @call_builtin_on_publish_diagnostics_with_modified_params
 	end
 end
 
@@ -922,6 +924,8 @@ end
 
 return {
 buf_attach = buf_attach,
+
+select_contextmenu = select_contextmenu,
 
 declaration = declaration,
 
