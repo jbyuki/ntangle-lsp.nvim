@@ -19,6 +19,8 @@ last_sent = {}
 
 local attached = {}
 
+local sent_did_open = {}
+
 local sections = {}
 local curSection = nil
 
@@ -54,6 +56,10 @@ local attach_to_buf
 local get_uri, get_uri_from_fn
 
 local outputSections
+
+local send_did_open
+
+local send_did_change_all
 
 function fill_border(borderbuf, border_opts, center_title, border_title)
 	local border_text = {}
@@ -150,7 +156,8 @@ local function buf_attach()
 	vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-lsp").definition()<CR>', {noremap = true})
 	vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
 	
-	attach_to_buf(bufnr, client_id, "cpp")
+	-- attach_to_buf(bufnr, client_id, "cpp")
+	send_did_open(bufnr, client_id, "cpp")
 	
 	register_client(bufnr, client_id)
 	
@@ -230,6 +237,8 @@ end
 local function declaration()
 	local pos, candidates = get_candidates_position()
 
+	send_did_change_all(client_clangd)
+
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/declaration', params)
@@ -253,6 +262,8 @@ end
 
 local function definition()
 	local pos, candidates = get_candidates_position()
+
+	send_did_change_all(client_clangd)
 
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
@@ -308,6 +319,8 @@ end
 
 local function hover()
 	local pos, candidates = get_candidates_position()
+
+	send_did_change_all(client_clangd)
 
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
@@ -524,31 +537,13 @@ end
 
 function make_on_publish_diagnostics()
 	return function(_, method, params, client_id)
-		local meta = genmeta[params.uri]
-		
-		local new_params = {}
-		new_params.uri = get_uri(0)
-		new_params.diagnostics = {}
-		
-		for _, diag in ipairs(params.diagnostics) do
-			local line_start_gen = diag.range["start"].line+1
-			local line_end_gen = diag.range["end"].line+1
-			
-			local offset_start = meta[line_start_gen].offset
-			local offset_end = meta[line_end_gen].offset
-			
-			diag.range["start"].character = diag.range["start"].character - offset_start
-			diag.range["end"].character = diag.range["end"].character - offset_end
-			
-			diag.range["start"].line = meta[line_start_gen].lnum-1
-			diag.range["end"].line = meta[line_end_gen].lnum-1
-			
-			local part = meta[line_start_gen].part
-			if part == get_uri(0) then
-				table.insert(new_params.diagnostics, diag)
-			end
-			
-		end
+		-- @get_tangled_meta_info
+		-- local new_params = {}
+		-- @uri_of_current_buffer
+		-- for _, diag in ipairs(params.diagnostics) do
+			-- @convert_line_number_tangled_line_numbers
+			-- @build_params_structure_to_pass_to_publish_diagnostics_if_current_buffer
+		-- end
 		-- @call_builtin_on_publish_diagnostics_with_modified_params
 	end
 end
@@ -563,6 +558,7 @@ function attach_to_buf(buf, client_id, language_id)
 	end
 	
 	attached[buf] = true
+	
 
 	vim.api.nvim_buf_attach(buf, true, {
 		on_lines = function(_, buf, changedtick, firstline, lastline, new_lastline, old_byte_size)
@@ -898,8 +894,299 @@ function outputSections(assembly_filename, lines, uri, name, prefix)
 	end
 end
 
+function send_did_open(buf, client_id, language_id)
+	local client = vim.lsp.get_client_by_id(client_id)
+	assert(client, "Could not find client_id")
+	
+	if sent_did_open[buf] then
+		return
+	end
+	sent_did_open[buf] = true
+	
+
+	local top = vim.api.nvim_buf_get_lines(buf, 0, 1, true)[1]
+	
+
+	local curassembly
+	local assembly_filename
+	if string.match(top, "^##%S*%s*$") then
+		local name = string.match(top, "^##(%S*)%s*$")
+		if not name or string.len(name) == 0 then
+			return
+		end
+		
+		curassembly = name
+		
+		local bufname = vim.api.nvim_buf_get_name(buf)
+		local extname = vim.fn.fnamemodify(bufname, ":e:e")
+		local relname = vim.fn.fnamemodify(curassembly, ":h")
+		local assname = vim.fn.fnamemodify(curassembly, ":t")
+		local parent = vim.fn.fnamemodify(bufname, ":h")
+		assembly_filename = parent .. "/" .. relname .. "/" .. assname .. "." .. extname
+		
+	end
+	
+	if not curassembly then
+		assembly_filename = vim.api.nvim_buf_get_name(buf)
+	end
+	
+
+	local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
+	local assembly_dir = vim.fn.fnamemodify(assembly_filename, ":h")
+	local assembly_name = vim.fn.fnamemodify(assembly_filename, ":t:r:r")
+	
+	local parts = vim.split(vim.fn.glob(assembly_dir .. "/tangle/" .. assembly_name .. ".*." .. extname), "\n")
+	
+	bufcontent[assembly_filename] = {}
+	for _, part in ipairs(parts) do
+		if part ~= "" then
+			local origin_path
+			local f = io.open(part, "r")
+			local origin_path = f:read("*line")
+			f:close()
+			
+			local uri = get_uri_from_fn(origin_path)
+	
+			local bufnum = vim.fn.bufnr(origin_path)
+			if bufnum and bufnum ~= -1 then
+				local lines = vim.api.nvim_buf_get_lines(bufnum, 0, -1, true)
+				bufcontent[assembly_filename][uri] = lines
+			
+			else 
+				local partlines = {}
+				local f = io.open(origin_path, "r")
+				if f then
+					while true do
+						local line = f:read("*line")
+						if not line then break end
+						table.insert(partlines, line)
+					end
+					f:close()
+				end
+				bufcontent[assembly_filename][uri] = partlines
+			end
+			
+		end
+	end
+	
+
+	sections = {}
+	curSection = nil
+	
+	parse(bufcontent[assembly_filename])
+	
+	local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
+	for name, section in pairs(sections) do
+		if section.root then
+			local fn
+			if name == "*" then
+				local tail = vim.fn.fnamemodify( assembly_filename, ":t:r" )
+				fn = parendir .. "/tangle/" .. tail
+			
+			else
+				if string.find(name, "/") then
+					fn = parendir .. "/" .. name
+				else
+					fn = parendir .. "/tangle/" .. name
+				end
+			end
+			
+			local lines = {}
+			local uri = get_uri_from_fn(fn)
+			
+			genmeta[uri] = {}
+			
+			if string.match(fn, "lua$") then
+				local relname
+				if filename then
+					relname = filename
+				else
+					relname = vim.api.nvim_buf_get_name(0)
+				end
+				relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
+				table.insert(lines, "-- Generated from " .. relname .. " using ntangle.nvim")
+				table.insert(genmeta[name], {})
+				
+			elseif string.match(fn, "vim$") then
+				local relname
+				if filename then
+					relname = filename
+				else
+					relname = vim.api.nvim_buf_get_name(0)
+				end
+				relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
+				table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
+				table.insert(genmeta[name], {})
+				
+			end
+			
+			outputSections(assembly_filename, lines, uri, name, "")
+			local params = {
+				textDocument = {
+					version = 0,
+					uri = uri,
+					-- TODO make sure our filetypes are compatible with languageId names.
+					languageId = language_id,
+					text = table.concat(lines, "\n"),
+				}
+			}
+			client.notify('textDocument/didOpen', params)
+			
+		end
+	end
+	
+end
+
+function send_did_change_all(client_id)
+	local client = vim.lsp.get_client_by_id(client_id)
+	assert(client, "Could not find client_id")
+	
+
+	local assemblies = {}
+	for buf,_ in pairs(sent_did_open) do
+		local top = vim.api.nvim_buf_get_lines(buf, 0, 1, true)[1]
+		
+	
+		local curassembly
+		local assembly_filename
+		if string.match(top, "^##%S*%s*$") then
+			local name = string.match(top, "^##(%S*)%s*$")
+			if not name or string.len(name) == 0 then
+				return
+			end
+			
+			curassembly = name
+			
+			local bufname = vim.api.nvim_buf_get_name(buf)
+			local extname = vim.fn.fnamemodify(bufname, ":e:e")
+			local relname = vim.fn.fnamemodify(curassembly, ":h")
+			local assname = vim.fn.fnamemodify(curassembly, ":t")
+			local parent = vim.fn.fnamemodify(bufname, ":h")
+			assembly_filename = parent .. "/" .. relname .. "/" .. assname .. "." .. extname
+			
+		end
+		
+		if not curassembly then
+			assembly_filename = vim.api.nvim_buf_get_name(buf)
+		end
+		
+		
+		assemblies[assembly_filename] = curassembly
+	end
+
+	for assembly_filename, curassembly in pairs(assemblies) do
+		local extname = vim.fn.fnamemodify(assembly_filename, ":e:e")
+		local assembly_dir = vim.fn.fnamemodify(assembly_filename, ":h")
+		local assembly_name = vim.fn.fnamemodify(assembly_filename, ":t:r:r")
+		
+		local parts = vim.split(vim.fn.glob(assembly_dir .. "/tangle/" .. assembly_name .. ".*." .. extname), "\n")
+		
+		bufcontent[assembly_filename] = {}
+		for _, part in ipairs(parts) do
+			if part ~= "" then
+				local origin_path
+				local f = io.open(part, "r")
+				local origin_path = f:read("*line")
+				f:close()
+				
+				local uri = get_uri_from_fn(origin_path)
+		
+				local bufnum = vim.fn.bufnr(origin_path)
+				if bufnum and bufnum ~= -1 then
+					local lines = vim.api.nvim_buf_get_lines(bufnum, 0, -1, true)
+					bufcontent[assembly_filename][uri] = lines
+				
+				else 
+					local partlines = {}
+					local f = io.open(origin_path, "r")
+					if f then
+						while true do
+							local line = f:read("*line")
+							if not line then break end
+							table.insert(partlines, line)
+						end
+						f:close()
+					end
+					bufcontent[assembly_filename][uri] = partlines
+				end
+				
+			end
+		end
+		
+
+		sections = {}
+		curSection = nil
+		
+		parse(bufcontent[assembly_filename])
+		
+		local parendir = vim.fn.fnamemodify(assembly_filename, ":p:h")
+		for name, section in pairs(sections) do
+			if section.root then
+				local fn
+				if name == "*" then
+					local tail = vim.fn.fnamemodify( assembly_filename, ":t:r" )
+					fn = parendir .. "/tangle/" .. tail
+				
+				else
+					if string.find(name, "/") then
+						fn = parendir .. "/" .. name
+					else
+						fn = parendir .. "/tangle/" .. name
+					end
+				end
+				
+				local lines = {}
+				local uri = get_uri_from_fn(fn)
+				
+				genmeta[uri] = {}
+				
+				if string.match(fn, "lua$") then
+					local relname
+					if filename then
+						relname = filename
+					else
+						relname = vim.api.nvim_buf_get_name(0)
+					end
+					relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
+					table.insert(lines, "-- Generated from " .. relname .. " using ntangle.nvim")
+					table.insert(genmeta[name], {})
+					
+				elseif string.match(fn, "vim$") then
+					local relname
+					if filename then
+						relname = filename
+					else
+						relname = vim.api.nvim_buf_get_name(0)
+					end
+					relname = vim.api.nvim_call_function("fnamemodify", { relname, ":t" })
+					table.insert(lines, "\" Generated from " .. relname .. " using ntangle.nvim")
+					table.insert(genmeta[name], {})
+					
+				end
+				
+				outputSections(assembly_filename, lines, uri, name, "")
+				last_sent[uri] = lines
+				client.notify("textDocument/didChange", {
+					textDocument = {
+					  uri = uri;
+					  version = changedtick;
+					};
+					contentChanges = { {
+						text = table.concat(lines, "\n")
+					} }
+				})
+				
+			end
+		end
+		
+		
+	end
+end
+
 local function type_definition()
 	local pos, candidates = get_candidates_position()
+
+	send_did_change_all(client_clangd)
 
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)

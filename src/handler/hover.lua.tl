@@ -22,6 +22,8 @@ end
 local function hover()
 	local pos, candidates = get_candidates_position()
 
+	send_did_change_all(client_clangd)
+
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/hover', params)

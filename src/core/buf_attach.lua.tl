@@ -20,7 +20,8 @@ vim.api.nvim_buf_set_keymap(bufnr, 'n', '<leader>j', '<cmd>lua require("ntangle-
 vim.api.nvim_buf_set_keymap(bufnr, 'n', 'K', '<cmd>lua require("ntangle-lsp").hover()<CR>', {noremap = true})
 
 @attach_ntangle_lsp_to_buf+=
-attach_to_buf(bufnr, client_id, "cpp")
+-- attach_to_buf(bufnr, client_id, "cpp")
+send_did_open(bufnr, client_id, "cpp")
 
 @register_client+=
 register_client(bufnr, client_id)

@@ -5,13 +5,13 @@ local make_on_publish_diagnostics
 @functions+=
 function make_on_publish_diagnostics()
 	return function(_, method, params, client_id)
-		@get_tangled_meta_info
-		local new_params = {}
-		@uri_of_current_buffer
-		for _, diag in ipairs(params.diagnostics) do
-			@convert_line_number_tangled_line_numbers
-			@build_params_structure_to_pass_to_publish_diagnostics_if_current_buffer
-		end
+		-- @get_tangled_meta_info
+		-- local new_params = {}
+		-- @uri_of_current_buffer
+		-- for _, diag in ipairs(params.diagnostics) do
+			-- @convert_line_number_tangled_line_numbers
+			-- @build_params_structure_to_pass_to_publish_diagnostics_if_current_buffer
+		-- end
 		-- @call_builtin_on_publish_diagnostics_with_modified_params
 	end
 end

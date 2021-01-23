@@ -15,6 +15,7 @@ function attach_to_buf(buf, client_id, language_id)
 
 			local curassembly
 			local assembly_filename
+			local top = lines[1] or ""
 			@read_assembly_name_if_any_and_figure_out_fictional_full_path
 			@if_no_assembly_replace_with_current_filename
 
@@ -32,6 +33,7 @@ function attach_to_buf(buf, client_id, language_id)
 
 		local curassembly
 		local assembly_filename
+		local top = lines[1] or ""
 		@read_assembly_name_if_any_and_figure_out_fictional_full_path
 		@if_no_assembly_replace_with_current_filename
 
@@ -57,7 +59,6 @@ assert(client, "Could not find client_id")
 local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, true)
 
 @read_assembly_name_if_any_and_figure_out_fictional_full_path+=
-local top = lines[1] or ""
 if string.match(top, "^##%S*%s*$") then
 	@extract_assembly_name
 	@set_as_current_assembly
@@ -333,3 +334,104 @@ if attached[buf] then
 end
 
 attached[buf] = true
+
+@declare_functions+=
+local send_did_open
+
+@functions+=
+function send_did_open(buf, client_id, language_id)
+	@get_client_from_id
+	@check_if_not_already_send_did_open
+
+	@read_top_line
+
+	local curassembly
+	local assembly_filename
+	@read_assembly_name_if_any_and_figure_out_fictional_full_path
+	@if_no_assembly_replace_with_current_filename
+
+	@glob_all_links
+	@foreach_part_append_them_to_assembled_and_check_if_buffer_loaded
+
+	@clear_sections
+	@parse_tangle_from_lines
+	@for_every_root_node_send_did_open_to_lsp_server
+end
+
+@script_variables+=
+local sent_did_open = {}
+
+@check_if_not_already_send_did_open+=
+if sent_did_open[buf] then
+	return
+end
+sent_did_open[buf] = true
+
+@read_top_line+=
+local top = vim.api.nvim_buf_get_lines(buf, 0, 1, true)[1]
+
+@foreach_part_append_them_to_assembled_and_check_if_buffer_loaded+=
+bufcontent[assembly_filename] = {}
+for _, part in ipairs(parts) do
+	if part ~= "" then
+		local origin_path
+		@read_link_from_link_file
+		local uri = get_uri_from_fn(origin_path)
+
+		@if_buffer_loaded_add_them_from_buffer
+		@otherwise_read_content_from_file
+	end
+end
+
+@if_buffer_loaded_add_them_from_buffer+=
+local bufnum = vim.fn.bufnr(origin_path)
+if bufnum and bufnum ~= -1 then
+	local lines = vim.api.nvim_buf_get_lines(bufnum, 0, -1, true)
+	bufcontent[assembly_filename][uri] = lines
+
+@otherwise_read_content_from_file+=
+else 
+	local partlines = {}
+	local f = io.open(origin_path, "r")
+	if f then
+		while true do
+			local line = f:read("*line")
+			if not line then break end
+			table.insert(partlines, line)
+		end
+		f:close()
+	end
+	bufcontent[assembly_filename][uri] = partlines
+end
+
+@declare_functions+=
+local send_did_change_all
+
+@functions+=
+function send_did_change_all(client_id)
+	@get_client_from_id
+
+	local assemblies = {}
+	@collect_all_assembly_names_in_loaded_buffers
+
+	for assembly_filename, curassembly in pairs(assemblies) do
+		@glob_all_links
+		@foreach_part_append_them_to_assembled_and_check_if_buffer_loaded
+
+		@clear_sections
+		@parse_tangle_from_lines
+		@for_every_root_node_send_content_to_lsp_server
+	end
+end
+
+@collect_all_assembly_names_in_loaded_buffers+=
+for buf,_ in pairs(sent_did_open) do
+	@read_top_line
+
+	local curassembly
+	local assembly_filename
+	@read_assembly_name_if_any_and_figure_out_fictional_full_path
+	@if_no_assembly_replace_with_current_filename
+	
+	assemblies[assembly_filename] = curassembly
+end
