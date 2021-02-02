@@ -2,7 +2,7 @@
 @functions+=
 local function start(lang)
 	if not lang or lang == "cpp" then
-		vim.lsp.set_log_level("debug")
+		-- vim.lsp.set_log_level("debug")
 		@create_lsp_client_with_clangd
 		@register_client_for_language
 	end

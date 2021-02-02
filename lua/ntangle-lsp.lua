@@ -382,6 +382,8 @@ end
 local function implementation()
 	local pos, candidates = get_candidates_position()
 
+	send_did_change_all(client_clangd)
+
 	local function action(sel)
 		local params = make_position_params(pos, candidates, sel)
 		buf_request('textDocument/implementation', params)
@@ -405,7 +407,7 @@ end
 
 local function start(lang)
 	if not lang or lang == "cpp" then
-		vim.lsp.set_log_level("debug")
+		-- vim.lsp.set_log_level("debug")
 		local client_id = vim.lsp.start_client {
 			cmd = { "clangd" },
 			root_dir = "C:/Users/i354324/",
