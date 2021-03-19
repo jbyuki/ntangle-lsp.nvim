@@ -410,7 +410,7 @@ local function start(lang)
 		-- vim.lsp.set_log_level("debug")
 		local client_id = vim.lsp.start_client {
 			cmd = { "clangd" },
-			root_dir = "C:/Users/i354324/",
+			root_dir = ".",
 			handlers = {
 				["textDocument/declaration"] = make_location_handler(),
 				["textDocument/definition"] = make_location_handler(),
