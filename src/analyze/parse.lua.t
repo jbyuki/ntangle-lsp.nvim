@@ -41,9 +41,6 @@ SECTION = 3,
 @create_new_section+=
 local section = { linetype = LineType.SECTION, str = name, lines = {}}
 
-@requires+=
-require("linkedlist")
-
 @parse_variables+=
 local sections = {}
 local curSection = nil
