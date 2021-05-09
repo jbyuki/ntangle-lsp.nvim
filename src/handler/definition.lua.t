@@ -20,8 +20,11 @@ end
 definition = definition,
 make_location_handler = make_location_handler,
 
+@declare_functions+=
+local make_location_handler
+
 @functions+=
-local function make_location_handler()
+function make_location_handler()
 	return function(_, method, result)
 		if not vim.tbl_islist(result) then result = { result } end
 
