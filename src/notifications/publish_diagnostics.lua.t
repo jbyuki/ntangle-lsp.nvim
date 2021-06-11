@@ -21,7 +21,6 @@ fname = fname:gsub("\\", "/")
 @convert_tangled_lnums+=
 local messages = {}
 for _, diag in ipairs(params.diagnostics) do
-  print(vim.inspect(diag))
   local lnum_start = diag.range["start"].line
   lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
   if lnum_start then
@@ -34,9 +33,12 @@ messages[lnum_start-1] = messages[lnum_start-1] or {}
 table.insert(messages[lnum_start-1], diag)
 
 @display_virtual_text_diagnostics+=
+local lcount = vim.api.nvim_buf_line_count(0)
 for lnum, msgs in pairs(messages) do
   local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
-  vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
-    virt_text = chunk,
-  })
+  if lnum < lcount then
+    vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
+      virt_text = chunk,
+    })
+  end
 end

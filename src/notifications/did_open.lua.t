@@ -7,6 +7,7 @@ function M.on_init(filename, ft, lines)
   local skip_send = false
   local did_open = function(rpc)
     @send_did_open_notification
+    @init_document_version
   end
 
   @start_client_if_not_running
@@ -71,9 +72,12 @@ local rpc = lsp.rpc.start(cmd, cmd_args, dispatch, {
 active_clients[ft] = active_clients[ft] or {}
 active_clients[ft][root_dir] = rpc
 
+@script_variables+=
+local clients = {}
+
 @register_client_for_filename+=
 local rpc = active_clients[ft][root_dir]
-active_clients[filename] = rpc
+clients[filename] = rpc
 
 @find_root_dir+=
 local root_dir = config.get_root_dir(filename)
@@ -84,7 +88,7 @@ local params = {
     version = 0,
     uri = vim.uri_from_fname(filename),
     languageId = ft,
-    text = table.concat(lines, "\n"),
+    text = "\n" .. table.concat(lines, "\n"),
   }
 }
 
@@ -130,6 +134,7 @@ local initialize_params = {
 rpc.request('initialize', initialize_params, function(init_err, result)
   @send_initialized_notify
   @send_did_change_configurations
+  @resolve_server_capabilities
   did_open(rpc)
 end)
 
@@ -148,7 +153,7 @@ local handler = handlers[method]
 if handler then
   return handler(params)
 else
-  print(method, vim.inspect(params))
+  -- print(method, vim.inspect(params))
 end
 
 @implement+=
@@ -182,3 +187,6 @@ end
 handlers['window/workDoneProgress/create'] = function(params)
   return vim.NIL
 end
+
+@resolve_server_capabilities+=
+-- local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
