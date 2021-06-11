@@ -5,6 +5,8 @@ local configs = require("lspconfig/configs")
 
 local lsp = vim.lsp
 
+local diag_ns = vim.api.nvim_create_namespace("")
+
 local M = {}
 function M.on_init(filename, ft, lines)
   local config = M.get_config(ft)
@@ -49,8 +51,39 @@ function M.on_init(filename, ft, lines)
     handlers['window/workDoneProgress/create'] = function(params)
       return vim.NIL
     end
-    dispatch.notification = function(...)
-      print("notification", vim.inspect({...}))
+    handlers["textDocument/publishDiagnostics"] = function(params)
+      vim.api.nvim_buf_clear_namespace(0, diag_ns, 0, -1)
+      
+      local fname = vim.uri_to_fname(params.uri)
+      fname = fname:gsub("\\", "/")
+      
+      local messages = {}
+      for _, diag in ipairs(params.diagnostics) do
+        print(vim.inspect(diag))
+        local lnum_start = diag.range["start"].line
+        lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
+        if lnum_start then
+          messages[lnum_start-1] = messages[lnum_start-1] or {}
+          table.insert(messages[lnum_start-1], { diag.message, "LspDiagnosticsError"})
+          
+        end
+      end
+      
+      for lnum, msgs in pairs(messages) do
+        vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
+          virt_text = msgs,
+        })
+      end
+    end
+    
+    dispatch.notification = function(method, params)
+      local handler = handlers[method]
+      if handler then
+        return handler(params)
+      else
+        print(method, vim.inspect(params))
+      end
+      
     end
     
     dispatch.server_request = function(method, params)

@@ -91,8 +91,8 @@ local params = {
 rpc.notify('textDocument/didOpen', params)
 
 @dispatch_functions+=
-dispatch.notification = function(...)
-  print("notification", vim.inspect({...}))
+dispatch.notification = function(method, params)
+  @handle_server_request
 end
 
 dispatch.server_request = function(method, params)
