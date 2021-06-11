@@ -11,8 +11,8 @@ Install
 Install using a plugin manager such as [vim-plug](https://github.com/junegunn/vim-plug).
 
 ```lua
--- ntangle-ts provides incremental changes for tangled source files
-Plug 'jbyuki/ntangle-ts.nvim'
+Plug 'jbyuki/ntangle-ts.nvim' -- provides incremental tangling
+Plug 'neovim/nvim-lspconfig' -- provides lsp server configs
 
 Plug 'jbyuki/ntangle-lsp.nvim'
 ```
