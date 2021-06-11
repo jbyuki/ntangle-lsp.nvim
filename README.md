@@ -16,3 +16,10 @@ Plug 'neovim/nvim-lspconfig' -- provides lsp server configs
 
 Plug 'jbyuki/ntangle-lsp.nvim'
 ```
+
+Config
+------
+
+```lua
+require"ntangle-lsp".setup()
+```
