@@ -31,11 +31,12 @@ end
 
 @append_text_diagnostics+=
 messages[lnum_start-1] = messages[lnum_start-1] or {}
-table.insert(messages[lnum_start-1], { diag.message, "LspDiagnosticsError"})
+table.insert(messages[lnum_start-1], diag)
 
 @display_virtual_text_diagnostics+=
 for lnum, msgs in pairs(messages) do
+  local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
   vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
-    virt_text = msgs,
+    virt_text = chunk,
   })
 end
