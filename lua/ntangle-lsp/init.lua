@@ -3,7 +3,7 @@ local tick = {}
 
 local changes = {}
 
-local changes_timer = {}
+local changes_cbs = {}
 
 local active_clients = {}
 
@@ -14,6 +14,8 @@ local lsp = vim.lsp
 local clients = {}
 
 local diag_ns = vim.api.nvim_create_namespace("")
+
+local all_messages = {}
 
 local M = {}
 function M.on_change(fname, start_byte, old_byte, new_byte,
@@ -39,7 +41,7 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
       
       rpc.notify("textDocument/didChange", params)
       
-      changes = {}
+      changes[fname] = {}
       
     end
 
@@ -61,18 +63,24 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
     
     table.insert(changes[fname], changed_range)
     
-    if changes_timer[fname] then
-      changes_timer[fname]:stop()
-      changes_timer[fname] = nil
+    local mode = vim.api.nvim_get_mode()
+    if mode.mode ~= "i" then
+      did_change()
     end
     
+    if #changes[fname] == 1 then
+      table.insert(changes_cbs, did_change)
+    end
     
-    local timer = vim.loop.new_timer()
-    changes_timer[fname] = timer 
-    timer:start(500, 0, vim.schedule_wrap(did_change))
   end
 end
 
+function M.insert_leave()
+  for _, cbs in ipairs(changes_cbs) do
+    cbs()
+  end
+  changes_cbs = {}
+end
 function M.on_init(filename, ft, lines)
   local config = M.get_config(ft)
   
@@ -126,6 +134,7 @@ function M.on_init(filename, ft, lines)
       fname = fname:gsub("\\", "/")
       
       local messages = {}
+      all_messages[fname] = messages
       for _, diag in ipairs(params.diagnostics) do
         local lnum_start = diag.range["start"].line
         lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
@@ -256,6 +265,13 @@ function M.setup(opts)
   assert(succ, [[ntangle-ts is not installed ("require"ntangle-ts" returns false)!]])
   
   require"ntangle-ts".register({ on_init = vim.schedule_wrap(M.on_init), on_change = M.on_change })
+  vim.api.nvim_command [[augroup ntanglelsp]]
+  vim.api.nvim_command [[autocmd!]]
+  
+  vim.api.nvim_command [[autocmd InsertLeave *.t lua require"ntangle-lsp".insert_leave()]]
+  
+  vim.api.nvim_command [[augroup END]]
+  
 end
 
 return M

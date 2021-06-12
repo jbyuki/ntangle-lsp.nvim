@@ -3,6 +3,9 @@
 function M.setup(opts)
   @verify_ntangle_ts_is_installed
   @setup_ntangle_ts_callback
+  @start_ntangle_lsp_autocommands
+  @register_insert_exit_autocommand
+  @end_ntangle_lsp_autocommands
 end
 
 @verify_ntangle_ts_is_installed+=

@@ -5,7 +5,6 @@ handlers["textDocument/publishDiagnostics"] = function(params)
   @convert_uri_publish_diagnostics
   @convert_tangled_lnums
   @display_virtual_text_diagnostics
-  @call_native_publish_diagnostics
 end
 
 @script_variables+=
@@ -20,6 +19,7 @@ fname = fname:gsub("\\", "/")
 
 @convert_tangled_lnums+=
 local messages = {}
+all_messages[fname] = messages
 for _, diag in ipairs(params.diagnostics) do
   local lnum_start = diag.range["start"].line
   lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
@@ -27,6 +27,9 @@ for _, diag in ipairs(params.diagnostics) do
     @append_text_diagnostics
   end
 end
+
+@script_variables+=
+local all_messages = {}
 
 @append_text_diagnostics+=
 messages[lnum_start-1] = messages[lnum_start-1] or {}

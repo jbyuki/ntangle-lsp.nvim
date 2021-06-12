@@ -24,7 +24,8 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
     end
 
     @append_changes
-    @start_debouce_timer
+    @if_not_insert_mode_send_immediatly
+    @add_callback_if_not_added
   end
 end
 
@@ -53,8 +54,6 @@ changes[fname] = changes[fname] or {}
 
 table.insert(changes[fname], changed_range)
 
-@reset_debounce_timer
-
 @send_did_open+=
 local uri = vim.uri_from_fname(fname)
 local params = {
@@ -68,18 +67,36 @@ local params = {
 rpc.notify("textDocument/didChange", params)
 
 @reset_changes+=
-changes = {}
+changes[fname] = {}
 
-@script_variables+=
-local changes_timer = {}
-
-@reset_debounce_timer+=
-if changes_timer[fname] then
-  changes_timer[fname]:stop()
-  changes_timer[fname] = nil
+@if_not_insert_mode_send_immediatly+=
+local mode = vim.api.nvim_get_mode()
+if mode.mode ~= "i" then
+  did_change()
 end
 
-@start_debouce_timer+=
-local timer = vim.loop.new_timer()
-changes_timer[fname] = timer 
-timer:start(500, 0, vim.schedule_wrap(did_change))
+@script_variables+=
+local changes_cbs = {}
+
+@add_callback_if_not_added+=
+if #changes[fname] == 1 then
+  table.insert(changes_cbs, did_change)
+end
+
+@start_ntangle_lsp_autocommands+=
+vim.api.nvim_command [[augroup ntanglelsp]]
+vim.api.nvim_command [[autocmd!]]
+
+@end_ntangle_lsp_autocommands+=
+vim.api.nvim_command [[augroup END]]
+
+@register_insert_exit_autocommand+=
+vim.api.nvim_command [[autocmd InsertLeave *.t lua require"ntangle-lsp".insert_leave()]]
+
+@implement+=
+function M.insert_leave()
+  for _, cbs in ipairs(changes_cbs) do
+    cbs()
+  end
+  changes_cbs = {}
+end
