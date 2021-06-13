@@ -5,6 +5,8 @@ LSP + Literate Programming([ntangle](https://github.com/jbyuki/ntangle.nvim)) Po
 
 **Note:** This is still in experimental stage. It's meant to test the feasability of such plugin.
 
+[![Capture.png](https://i.postimg.cc/Kz3JJCMW/Capture.png)](https://postimg.cc/qh0s7bQc)
+
 Install
 -------
 

@@ -23,12 +23,10 @@ fname = fname:gsub("\\", "/")
 local messages = {}
 all_messages[fname] = messages
 for _, diag in ipairs(params.diagnostics) do
-  if diag.severity < 4 then
-    local lnum_start = diag.range["start"].line+1
-    lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
-    if lnum_start then
-      @append_text_diagnostics
-    end
+  local lnum_start = diag.range["start"].line+1
+  lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
+  if lnum_start then
+    @append_text_diagnostics
   end
 end
 
