@@ -324,6 +324,15 @@ function M.on_init(filename, ft, lines)
                     border = "single",
                   })
 
+                  local ns = vim.api.nvim_create_namespace("")
+                  local active = sig.activeParameter or 1
+                  active = math.max(active, 1)
+                  local col = sig.parameters[active].label
+                  vim.api.nvim_buf_set_extmark(buf, ns, 0, col[1], {
+                    hl_group = "Cursor",
+                    end_col = col[2],
+                  })
+
                   if signature_win then
                     vim.api.nvim_win_close(signature_win, true)
                   end

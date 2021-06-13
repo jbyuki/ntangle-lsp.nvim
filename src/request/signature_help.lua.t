@@ -122,6 +122,16 @@ local new_signature_win = vim.api.nvim_open_win(buf, false,{
   border = "single",
 })
 
+@highlight_active_parameter+=
+local ns = vim.api.nvim_create_namespace("")
+local active = sig.activeParameter or 1
+active = math.max(active, 1)
+local col = sig.parameters[active].label
+vim.api.nvim_buf_set_extmark(buf, ns, 0, col[1], {
+  hl_group = "Cursor",
+  end_col = col[2],
+})
+
 @if_already_open_replace_signature_window+=
 if signature_win then
   vim.api.nvim_win_close(signature_win, true)
