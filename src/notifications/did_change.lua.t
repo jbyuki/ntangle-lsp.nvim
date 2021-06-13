@@ -64,8 +64,6 @@ local params = {
   contentChanges = changes[fname],
 }
 
-print(vim.inspect(params))
-
 rpc.notify("textDocument/didChange", params)
 
 @reset_changes+=

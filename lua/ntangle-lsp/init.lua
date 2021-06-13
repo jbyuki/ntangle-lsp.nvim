@@ -41,8 +41,6 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
         contentChanges = changes[fname],
       }
       
-      print(vim.inspect(params))
-      
       rpc.notify("textDocument/didChange", params)
       
       changes[fname] = {}
@@ -142,13 +140,14 @@ function M.on_init(filename, ft, lines)
         local messages = {}
         all_messages[fname] = messages
         for _, diag in ipairs(params.diagnostics) do
-          local lnum_start = diag.range["start"].line+1
-          print("diag", lnum_start)
-          lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
-          if lnum_start then
-            messages[lnum_start-1] = messages[lnum_start-1] or {}
-            table.insert(messages[lnum_start-1], diag)
-            
+          if diag.severity < 4 then
+            local lnum_start = diag.range["start"].line+1
+            lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
+            if lnum_start then
+              messages[lnum_start-1] = messages[lnum_start-1] or {}
+              table.insert(messages[lnum_start-1], diag)
+              
+            end
           end
         end
         
