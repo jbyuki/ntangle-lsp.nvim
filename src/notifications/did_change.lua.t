@@ -95,6 +95,12 @@ vim.api.nvim_command [[autocmd InsertLeave *.t lua require"ntangle-lsp".insert_l
 
 @implement+=
 function M.insert_leave()
+  M.send_pending()
+  @close_any_signature_help
+end
+
+@implement+=
+function M.send_pending()
   for _, cbs in ipairs(changes_cbs) do
     cbs()
   end

@@ -15,9 +15,14 @@ local clients = {}
 
 local attached = {}
 
-local diag_ns = vim.api.nvim_create_namespace("")
+local show_diags_cbs
+
+local diag_ns = {} 
 
 local all_messages = {}
+
+local signature_win
+local signature_row, signature_col
 
 local M = {}
 function M.on_change(fname, start_byte, old_byte, new_byte,
@@ -78,6 +83,17 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
 end
 
 function M.insert_leave()
+  M.send_pending()
+  if signature_win then
+    vim.api.nvim_win_close(signature_win, true)
+    signature_win = nil
+    signature_row = nil
+    signature_col = nil
+  end
+
+end
+
+function M.send_pending()
   for _, cbs in ipairs(changes_cbs) do
     cbs()
   end
@@ -131,8 +147,17 @@ function M.on_init(filename, ft, lines)
     end
 
     handlers["textDocument/publishDiagnostics"] = function(params)
+      local mode = vim.api.nvim_get_mode()
+      if mode.mode == "i" then
+        return
+      end
       if attached[params.uri] then
-        vim.api.nvim_buf_clear_namespace(0, diag_ns, 0, -1)
+        if not diag_ns[params.uri] then
+          diag_ns[params.uri] = vim.api.nvim_create_namespace("")
+        end
+        local ns = diag_ns[params.uri]
+
+        vim.api.nvim_buf_clear_namespace(0, ns, 0, -1)
 
         local fname = vim.uri_to_fname(params.uri)
         fname = fname:gsub("\\", "/")
@@ -153,11 +178,12 @@ function M.on_init(filename, ft, lines)
         for lnum, msgs in pairs(messages) do
           local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
           if lnum < lcount then
-            vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
+            vim.api.nvim_buf_set_extmark(0, ns, lnum, 0, {
               virt_text = chunk,
             })
           end
         end
+
       end
     end
 
@@ -227,7 +253,90 @@ function M.on_init(filename, ft, lines)
         })
       end
 
-      -- local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
+      local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
+
+      vim.api.nvim_buf_attach(0, true, { 
+        on_bytes = function(_, _, _, 
+          start_row, start_col, start_byte,
+          end_row, end_col, end_byte,
+          new_end_row, new_end_col, new_end_byte) 
+          if not (end_byte == 0 and new_end_byte == 1) then
+            return
+          end
+
+
+          local line = vim.api.nvim_buf_get_lines(0, start_row, start_row+1, true)[1]
+          local c = line:sub(start_col+1,start_col+1)
+
+          if c == ')' then
+            vim.schedule(function()
+              if signature_win then
+                vim.api.nvim_win_close(signature_win, true)
+                signature_win = nil
+                signature_row = nil
+                signature_col = nil
+              end
+
+            end)
+          end
+          local match = false
+          for _, t in ipairs(resolved_capabilities.signature_help_trigger_characters) do
+            if c == t then
+              match = true
+            end
+          end
+
+          if match then
+            vim.schedule(function()
+              M.send_pending()
+
+              local params = M.make_position_param()
+
+              rpc.request("textDocument/signatureHelp", params, function(_, result)
+                if result then
+                  local sigs = result.signatures
+                  local sig = sigs[#sigs]
+
+                  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+                  local buf = vim.api.nvim_get_current_buf()
+
+                  local win_row, win_col
+                  if signature_row and signature_col then
+                    win_row = signature_row
+                    win_col = signature_col
+                  else
+                    win_row = row
+                    win_col = col + 4
+                  end
+                  signature_row, signature_col  = win_row, win_col 
+
+                  local buf = vim.api.nvim_create_buf(false, true)
+                  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { sig.label })
+
+                  local new_signature_win = vim.api.nvim_open_win(buf, false,{
+                    relative = "win",
+                    win = vim.api.nvim_get_current_win(),
+                    row = win_row,
+                    col = win_col,
+                    width = string.len(sig.label),
+                    height = 1,
+                    style = "minimal",
+                    border = "single",
+                  })
+
+                  if signature_win then
+                    vim.api.nvim_win_close(signature_win, true)
+                  end
+                  signature_win = new_signature_win
+
+                end
+              end)
+
+            end)
+          end
+
+        end
+      })
 
       did_open(rpc)
     end)
@@ -264,6 +373,31 @@ function M.lookup_section(settings, section)
     end
   end
   return settings
+end
+
+function M.make_position_param()
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local buf = vim.api.nvim_get_current_buf()
+
+  local lnum, prefix_len, filename = require"ntangle-ts".lookup(buf, row)
+
+  local line = vim.api.nvim_buf_get_lines(0, row-1, row, true)[1]
+  local char = 0
+  if line then
+    char = vim.str_utfindex(line, col)
+  end
+
+  local params = {
+    textDocument = {
+      uri = vim.uri_from_fname(filename),
+    },
+    position = {
+      line = lnum - 1,
+      character = char + prefix_len,
+    }
+  }
+
+  return params
 end
 
 function M.setup(opts)

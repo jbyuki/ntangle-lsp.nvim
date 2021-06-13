@@ -136,6 +136,7 @@ rpc.request('initialize', initialize_params, function(init_err, result)
   @send_initialized_notify
   @send_did_change_configurations
   @resolve_server_capabilities
+  @attach_signature_help_callback
   did_open(rpc)
 end)
 
@@ -190,7 +191,7 @@ handlers['window/workDoneProgress/create'] = function(params)
 end
 
 @resolve_server_capabilities+=
--- local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
+local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
 
 @script_variables+=
 local attached = {}
