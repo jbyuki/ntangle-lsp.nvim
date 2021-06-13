@@ -3,6 +3,7 @@
 function M.on_init(filename, ft, lines)
   @get_client_config_from_lsp_config
   @find_root_dir
+  @set_as_attached
 
   local skip_send = false
   local did_open = function(rpc)
@@ -48,7 +49,7 @@ local config = M.get_config(ft)
 @start_client+=
 local dispatch = {}
 local handlers = {}
-send_skip = true
+skip_send = true
 @lsp_handlers
 @dispatch_functions
 @split_cmds_list
@@ -88,7 +89,7 @@ local params = {
     version = 0,
     uri = vim.uri_from_fname(filename),
     languageId = ft,
-    text = "\n" .. table.concat(lines, "\n"),
+    text = table.concat(lines, "\n"),
   }
 }
 
@@ -190,3 +191,9 @@ end
 
 @resolve_server_capabilities+=
 -- local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
+
+@script_variables+=
+local attached = {}
+
+@set_as_attached+=
+attached[vim.uri_from_fname(filename)] = true

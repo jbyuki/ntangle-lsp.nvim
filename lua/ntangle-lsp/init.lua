@@ -13,6 +13,8 @@ local lsp = vim.lsp
 
 local clients = {}
 
+local attached = {}
+
 local diag_ns = vim.api.nvim_create_namespace("")
 
 local all_messages = {}
@@ -39,6 +41,8 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
         contentChanges = changes[fname],
       }
       
+      print(vim.inspect(params))
+      
       rpc.notify("textDocument/didChange", params)
       
       changes[fname] = {}
@@ -53,8 +57,8 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
     local changed_range = {
       range = {
         -- +1 is caused by the generated header
-        start = { line = start_row+1, character = 0},
-        ["end"] = { line = start_row+old_row+1, character = 0}
+        start = { line = start_row, character = 0},
+        ["end"] = { line = start_row+old_row, character = 0}
       },
       text = new_text,
     }
@@ -86,6 +90,7 @@ function M.on_init(filename, ft, lines)
   
   local root_dir = config.get_root_dir(filename)
   
+  attached[vim.uri_from_fname(filename)] = true
 
   local skip_send = false
   local did_open = function(rpc)
@@ -94,20 +99,20 @@ function M.on_init(filename, ft, lines)
         version = 0,
         uri = vim.uri_from_fname(filename),
         languageId = ft,
-        text = "\n" .. table.concat(lines, "\n"),
+        text = table.concat(lines, "\n"),
       }
     }
     
     rpc.notify('textDocument/didOpen', params)
     
-    tick[filename] = 0
+    tick[filename] = 10
     
   end
 
   if not active_clients[ft] or not active_clients[ft][root] then
     local dispatch = {}
     local handlers = {}
-    send_skip = true
+    skip_send = true
     handlers["workspace/configuration"] = function(params)
       local result = {}
       for _, item in ipairs(params.items) do
@@ -128,30 +133,33 @@ function M.on_init(filename, ft, lines)
     end
     
     handlers["textDocument/publishDiagnostics"] = function(params)
-      vim.api.nvim_buf_clear_namespace(0, diag_ns, 0, -1)
-      
-      local fname = vim.uri_to_fname(params.uri)
-      fname = fname:gsub("\\", "/")
-      
-      local messages = {}
-      all_messages[fname] = messages
-      for _, diag in ipairs(params.diagnostics) do
-        local lnum_start = diag.range["start"].line
-        lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
-        if lnum_start then
-          messages[lnum_start-1] = messages[lnum_start-1] or {}
-          table.insert(messages[lnum_start-1], diag)
-          
+      if attached[params.uri] then
+        vim.api.nvim_buf_clear_namespace(0, diag_ns, 0, -1)
+        
+        local fname = vim.uri_to_fname(params.uri)
+        fname = fname:gsub("\\", "/")
+        
+        local messages = {}
+        all_messages[fname] = messages
+        for _, diag in ipairs(params.diagnostics) do
+          local lnum_start = diag.range["start"].line+1
+          print("diag", lnum_start)
+          lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
+          if lnum_start then
+            messages[lnum_start-1] = messages[lnum_start-1] or {}
+            table.insert(messages[lnum_start-1], diag)
+            
+          end
         end
-      end
-      
-      local lcount = vim.api.nvim_buf_line_count(0)
-      for lnum, msgs in pairs(messages) do
-        local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
-        if lnum < lcount then
-          vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
-            virt_text = chunk,
-          })
+        
+        local lcount = vim.api.nvim_buf_line_count(0)
+        for lnum, msgs in pairs(messages) do
+          local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
+          if lnum < lcount then
+            vim.api.nvim_buf_set_extmark(0, diag_ns, lnum, 0, {
+              virt_text = chunk,
+            })
+          end
         end
       end
     end
@@ -223,6 +231,7 @@ function M.on_init(filename, ft, lines)
       end
       
       -- local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
+      
       did_open(rpc)
     end)
     

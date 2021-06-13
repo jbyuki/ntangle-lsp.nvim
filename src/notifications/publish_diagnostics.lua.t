@@ -1,10 +1,12 @@
 ##../ntangle-lsp
 @lsp_handlers+=
 handlers["textDocument/publishDiagnostics"] = function(params)
-  @clear_diagnostics
-  @convert_uri_publish_diagnostics
-  @convert_tangled_lnums
-  @display_virtual_text_diagnostics
+  if attached[params.uri] then
+    @clear_diagnostics
+    @convert_uri_publish_diagnostics
+    @convert_tangled_lnums
+    @display_virtual_text_diagnostics
+  end
 end
 
 @script_variables+=
@@ -21,7 +23,8 @@ fname = fname:gsub("\\", "/")
 local messages = {}
 all_messages[fname] = messages
 for _, diag in ipairs(params.diagnostics) do
-  local lnum_start = diag.range["start"].line
+  local lnum_start = diag.range["start"].line+1
+  print("diag", lnum_start)
   lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
   if lnum_start then
     @append_text_diagnostics

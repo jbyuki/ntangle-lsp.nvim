@@ -3,7 +3,7 @@
 local tick = {}
 
 @init_document_version+=
-tick[filename] = 0
+tick[filename] = 10
 
 @increment_document_version+=
 local version = tick[fname]
@@ -19,7 +19,7 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
   if rpc then
     local did_change = function()
       @increment_document_version
-      @send_did_open
+      @send_did_change
       @reset_changes
     end
 
@@ -44,8 +44,8 @@ end
 local changed_range = {
   range = {
     -- +1 is caused by the generated header
-    start = { line = start_row+1, character = 0},
-    ["end"] = { line = start_row+old_row+1, character = 0}
+    start = { line = start_row, character = 0},
+    ["end"] = { line = start_row+old_row, character = 0}
   },
   text = new_text,
 }
@@ -54,7 +54,7 @@ changes[fname] = changes[fname] or {}
 
 table.insert(changes[fname], changed_range)
 
-@send_did_open+=
+@send_did_change+=
 local uri = vim.uri_from_fname(fname)
 local params = {
   textDocument = {
@@ -63,6 +63,8 @@ local params = {
   },
   contentChanges = changes[fname],
 }
+
+print(vim.inspect(params))
 
 rpc.notify("textDocument/didChange", params)
 
