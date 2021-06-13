@@ -81,27 +81,14 @@ rpc.request("textDocument/signatureHelp", params, function(_, result)
   if result then
     @pick_last_signature
     @get_window_cursor_position
-    @position_signature_help_on_cursor_or_old
     @create_signature_help_window
     @highlight_active_parameter
     @if_already_open_replace_signature_window
   end
 end)
 
-@position_signature_help_on_cursor_or_old+=
-local win_row, win_col
-if signature_row and signature_col then
-  win_row = signature_row
-  win_col = signature_col
-else
-  win_row = row
-  win_col = col + 4
-end
-signature_row, signature_col  = win_row, win_col 
-
 @script_variables+=
 local signature_win
-local signature_row, signature_col
 
 @pick_last_signature+=
 local sigs = result.signatures
@@ -112,10 +99,9 @@ local buf = vim.api.nvim_create_buf(false, true)
 vim.api.nvim_buf_set_lines(buf, 0, -1, true, { sig.label })
 
 local new_signature_win = vim.api.nvim_open_win(buf, false,{
-  relative = "win",
-  win = vim.api.nvim_get_current_win(),
-  row = win_row,
-  col = win_col,
+  relative = "cursor",
+  row = 1,
+  col = 0,
   width = string.len(sig.label),
   height = 1,
   style = "minimal",
@@ -146,8 +132,6 @@ signature_win = new_signature_win
 if signature_win then
   vim.api.nvim_win_close(signature_win, true)
   signature_win = nil
-  signature_row = nil
-  signature_col = nil
 end
 
 @if_close_paren_close_signature_window+=

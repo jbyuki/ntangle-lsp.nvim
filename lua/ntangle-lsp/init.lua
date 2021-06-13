@@ -22,7 +22,6 @@ local diag_ns = {}
 local all_messages = {}
 
 local signature_win
-local signature_row, signature_col
 
 local M = {}
 function M.on_change(fname, start_byte, old_byte, new_byte,
@@ -87,8 +86,6 @@ function M.insert_leave()
   if signature_win then
     vim.api.nvim_win_close(signature_win, true)
     signature_win = nil
-    signature_row = nil
-    signature_col = nil
   end
 
 end
@@ -273,8 +270,6 @@ function M.on_init(filename, ft, lines)
               if signature_win then
                 vim.api.nvim_win_close(signature_win, true)
                 signature_win = nil
-                signature_row = nil
-                signature_col = nil
               end
 
             end)
@@ -300,24 +295,13 @@ function M.on_init(filename, ft, lines)
                   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
                   local buf = vim.api.nvim_get_current_buf()
 
-                  local win_row, win_col
-                  if signature_row and signature_col then
-                    win_row = signature_row
-                    win_col = signature_col
-                  else
-                    win_row = row
-                    win_col = col + 4
-                  end
-                  signature_row, signature_col  = win_row, win_col 
-
                   local buf = vim.api.nvim_create_buf(false, true)
                   vim.api.nvim_buf_set_lines(buf, 0, -1, true, { sig.label })
 
                   local new_signature_win = vim.api.nvim_open_win(buf, false,{
-                    relative = "win",
-                    win = vim.api.nvim_get_current_win(),
-                    row = win_row,
-                    col = win_col,
+                    relative = "cursor",
+                    row = 1,
+                    col = 0,
                     width = string.len(sig.label),
                     height = 1,
                     style = "minimal",
