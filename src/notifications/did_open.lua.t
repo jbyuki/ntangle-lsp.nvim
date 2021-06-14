@@ -36,10 +36,29 @@ function M.get_config(ft)
     if config.filetypes then
       for _, filetype_match in ipairs(config.filetypes) do
         if filetype_match == ft then
+          @find_customized_config_with_debug
           return config
         end
       end
     end
+  end
+end
+
+@find_customized_config_with_debug+=
+-- This kind of a hack but it's the only way
+-- I found to get the config from outside nvim-lspconfig
+local _config = require"lspconfig"[config.name]
+if _config and _config.manager and _config.manager.try_add_wrapper then
+  local fn = _config.manager.try_add_wrapper
+  local i = 1
+  while true do
+    local n, v = debug.getupvalue(fn, i)
+    if not n then break end
+    if n == "config" then
+      config = v
+      break
+    end
+    i = i + 1
   end
 end
 
@@ -81,7 +100,8 @@ local rpc = active_clients[ft][root_dir]
 clients[filename] = rpc
 
 @find_root_dir+=
-local root_dir = config.get_root_dir(filename)
+local root_dir = config.root_dir(filename)
+-- local root_dir = config.get_root_dir(filename)
 
 @send_did_open_notification+=
 local params = {
