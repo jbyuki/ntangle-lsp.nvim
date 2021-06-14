@@ -310,11 +310,19 @@ function M.on_init(filename, ft, lines)
                   })
 
                   local ns = vim.api.nvim_create_namespace("")
-                  local active = sig.activeParameter or 1
-                  active = math.max(active, 1)
-                  if sig.parameters then
+                  local active = sig.activeParameter
+                  if active and sig.parameters then
+                    active = math.max(active, 1)
                     if sig.parameters[active] and sig.parameters[active].label then
+                      print(vim.inspect(sig))
                       local col = sig.parameters[active].label
+                      if type(col) == "string" then
+                        col = { string.find(sig.label, col, 1, true) }
+                        if col then
+                          col[1] = col[1] - 1
+                        end
+
+                      end
                       vim.api.nvim_buf_set_extmark(buf, ns, 0, col[1], {
                         hl_group = "Cursor",
                         end_col = col[2],
