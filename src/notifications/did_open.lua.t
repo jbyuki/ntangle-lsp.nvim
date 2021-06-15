@@ -1,9 +1,10 @@
 ##../ntangle-lsp
 @implement+=
-function M.on_init(filename, ft, lines)
+function M.on_init(buf, filename, ft, lines)
   @get_client_config_from_lsp_config
   @find_root_dir
   @set_as_attached
+  @setup_mappings
 
   local skip_send = false
   local did_open = function(rpc)
@@ -97,7 +98,7 @@ local clients = {}
 
 @register_client_for_filename+=
 local rpc = active_clients[ft][root_dir]
-clients[filename] = rpc
+clients[buf] = rpc
 
 @find_root_dir+=
 local root_dir = config.root_dir(filename)

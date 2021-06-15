@@ -6,6 +6,7 @@ function M.setup(opts)
   @start_ntangle_lsp_autocommands
   @register_insert_exit_autocommand
   @end_ntangle_lsp_autocommands
+  @save_mappings
 end
 
 @verify_ntangle_ts_is_installed+=

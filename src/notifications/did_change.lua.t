@@ -11,10 +11,12 @@ version =  version + 1
 tick[fname] = version
 
 @implement+=
-function M.on_change(fname, start_byte, old_byte, new_byte,
+function M.on_change(buf, fname, 
+    start_byte, old_byte, new_byte,
     start_row, start_col,
     old_row, old_end_col,
-    new_row, new_end_col, lines)
+    new_row, new_end_col, 
+    lines)
   @get_client_rpc
   if rpc then
     local did_change = function()
@@ -30,7 +32,7 @@ function M.on_change(fname, start_byte, old_byte, new_byte,
 end
 
 @get_client_rpc+=
-local rpc = clients[fname]
+local rpc = clients[buf]
 
 @script_variables+=
 local changes = {}

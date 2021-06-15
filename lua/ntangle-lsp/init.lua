@@ -21,14 +21,19 @@ local diag_ns = {}
 
 local all_messages = {}
 
+local mappings = {}
+local mappings_lookup = {}
+
 local signature_win
 
 local M = {}
-function M.on_change(fname, start_byte, old_byte, new_byte,
+function M.on_change(buf, fname, 
+    start_byte, old_byte, new_byte,
     start_row, start_col,
     old_row, old_end_col,
-    new_row, new_end_col, lines)
-  local rpc = clients[fname]
+    new_row, new_end_col, 
+    lines)
+  local rpc = clients[buf]
 
   if rpc then
     local did_change = function()
@@ -96,13 +101,19 @@ function M.send_pending()
   end
   changes_cbs = {}
 end
-function M.on_init(filename, ft, lines)
+function M.on_init(buf, filename, ft, lines)
   local config = M.get_config(ft)
 
   local root_dir = config.root_dir(filename)
   -- local root_dir = config.get_root_dir(filename)
 
   attached[vim.uri_from_fname(filename)] = true
+  for i, map in ipairs(mappings_lookup) do
+    local lhs, rhs = unpack(map)
+
+    vim.api.nvim_buf_set_keymap(buf, "n", lhs, [[<cmd>:lua require"ntangle-lsp".do_mapping(]] .. i .. [[)<CR>]], { noremap = true })
+  end
+
 
   local skip_send = false
   local did_open = function(rpc)
@@ -353,7 +364,7 @@ function M.on_init(filename, ft, lines)
   end
 
   local rpc = active_clients[ft][root_dir]
-  clients[filename] = rpc
+  clients[buf] = rpc
 
 
   if not skip_send then
@@ -400,6 +411,52 @@ function M.lookup_section(settings, section)
   return settings
 end
 
+function M.do_mapping(id)
+  if mappings_lookup[id] then
+    local _, rhs = unpack(mappings_lookup[id])
+    if rhs and type(rhs) == "function" then
+      rhs()
+    end
+  end
+end
+
+function M.definition()
+  local buf = vim.api.nvim_get_current_buf()
+  local rpc = clients[buf]
+
+  M.send_pending()
+
+  local params = M.make_position_param()
+
+  rpc.request("textDocument/definition", params, function(_, result)
+    if result then
+      if #result >= 1 then
+        result = result[#result]
+      end
+
+      local fn, lnum
+      if result.targetUri then
+        fn = vim.uri_to_fname(result.targetUri)
+        lnum = result.targetRange.start.line + 1
+
+      elseif result.uri then
+        fn = vim.uri_to_fname(result.uri)
+        lnum = result.range.start.line + 1
+
+      else
+        return
+      end
+
+      if fn ~= vim.api.nvim_buf_get_name(buf) then
+        vim.api.nvim_command("e " .. fn)
+      end
+
+      vim.api.nvim_win_set_cursor(0, { lnum, 0 })
+    end
+  end)
+
+end
+
 function M.make_position_param()
   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
   local buf = vim.api.nvim_get_current_buf()
@@ -436,6 +493,13 @@ function M.setup(opts)
   vim.api.nvim_command [[autocmd InsertLeave *.t lua require"ntangle-lsp".insert_leave()]]
 
   vim.api.nvim_command [[augroup END]]
+
+  mappings = (opts and opts.mappings or {}) or {}
+
+  local mapping_id = 1
+  for lhs, rhs in pairs(mappings) do
+    table.insert(mappings_lookup, {lhs, rhs})
+  end
 
 end
 
