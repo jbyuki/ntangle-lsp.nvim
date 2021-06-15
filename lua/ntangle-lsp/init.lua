@@ -293,48 +293,50 @@ function M.on_init(filename, ft, lines)
                   local sigs = result.signatures
                   local sig = sigs[#sigs]
 
-                  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
-                  local buf = vim.api.nvim_get_current_buf()
+                  if sig then
+                    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+                    local buf = vim.api.nvim_get_current_buf()
 
-                  local buf = vim.api.nvim_create_buf(false, true)
-                  vim.api.nvim_buf_set_lines(buf, 0, -1, true, { sig.label })
+                    local buf = vim.api.nvim_create_buf(false, true)
+                    vim.api.nvim_buf_set_lines(buf, 0, -1, true, { sig.label })
 
-                  local new_signature_win = vim.api.nvim_open_win(buf, false,{
-                    relative = "cursor",
-                    row = 1,
-                    col = 0,
-                    width = string.len(sig.label),
-                    height = 1,
-                    style = "minimal",
-                    border = "single",
-                  })
+                    local new_signature_win = vim.api.nvim_open_win(buf, false,{
+                      relative = "cursor",
+                      row = 1,
+                      col = 0,
+                      width = string.len(sig.label),
+                      height = 1,
+                      style = "minimal",
+                      border = "single",
+                    })
 
-                  local ns = vim.api.nvim_create_namespace("")
-                  local active = sig.activeParameter
-                  if active and sig.parameters then
-                    active = math.max(active, 1)
-                    if sig.parameters[active] and sig.parameters[active].label then
-                      print(vim.inspect(sig))
-                      local col = sig.parameters[active].label
-                      if type(col) == "string" then
-                        col = { string.find(sig.label, col, 1, true) }
-                        if col then
-                          col[1] = col[1] - 1
+                    local ns = vim.api.nvim_create_namespace("")
+                    local active = sig.activeParameter
+                    if active and sig.parameters then
+                      active = math.max(active, 1)
+                      if sig.parameters[active] and sig.parameters[active].label then
+                        print(vim.inspect(sig))
+                        local col = sig.parameters[active].label
+                        if type(col) == "string" then
+                          col = { string.find(sig.label, col, 1, true) }
+                          if col then
+                            col[1] = col[1] - 1
+                          end
+
                         end
-
+                        vim.api.nvim_buf_set_extmark(buf, ns, 0, col[1], {
+                          hl_group = "Cursor",
+                          end_col = col[2],
+                        })
                       end
-                      vim.api.nvim_buf_set_extmark(buf, ns, 0, col[1], {
-                        hl_group = "Cursor",
-                        end_col = col[2],
-                      })
                     end
-                  end
 
-                  if signature_win then
-                    vim.api.nvim_win_close(signature_win, true)
-                  end
-                  signature_win = new_signature_win
+                    if signature_win then
+                      vim.api.nvim_win_close(signature_win, true)
+                    end
+                    signature_win = new_signature_win
 
+                  end
                 end
               end)
 

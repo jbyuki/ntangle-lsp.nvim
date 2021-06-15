@@ -80,10 +80,12 @@ local params = {
 rpc.request("textDocument/signatureHelp", params, function(_, result)
   if result then
     @pick_last_signature
-    @get_window_cursor_position
-    @create_signature_help_window
-    @highlight_active_parameter
-    @if_already_open_replace_signature_window
+    if sig then
+      @get_window_cursor_position
+      @create_signature_help_window
+      @highlight_active_parameter
+      @if_already_open_replace_signature_window
+    end
   end
 end)
 
