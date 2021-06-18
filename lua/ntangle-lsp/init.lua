@@ -457,6 +457,48 @@ function M.definition()
 
 end
 
+function M.hover()
+  local buf = vim.api.nvim_get_current_buf()
+  local rpc = clients[buf]
+
+  M.send_pending()
+
+  local params = M.make_position_param()
+
+  rpc.request("textDocument/hover", params, function(_, result)
+    if result then
+      local buf = vim.api.nvim_create_buf(false, true)
+
+      local lines = vim.split(result.contents.value, "\n")
+      vim.api.nvim_buf_set_lines(buf, 0, -1, true, lines)
+      vim.api.nvim_buf_set_option(buf, "ft", "markdown")
+
+      local max_width = 0
+      for _, line in ipairs(lines) do
+        max_width = math.max(vim.api.nvim_strwidth(line), max_width)
+      end
+
+
+      local win_hover = vim.api.nvim_open_win(buf, false, {
+        relative = "cursor",
+        row = 1,
+        col = 0,
+        width = math.min(max_width, 100),
+        height = 20,
+        style = "minimal",
+        border = "single",
+      })
+
+      M.close_preview_autocmd({"CursorMoved", "CursorMovedI", "BufHidden", "BufLeave"}, win_hover)
+    end
+  end)
+
+end
+
+function M.close_preview_autocmd(events, winnr)
+  vim.api.nvim_command("autocmd "..table.concat(events, ',').." <buffer> ++once lua pcall(vim.api.nvim_win_close, "..winnr..", true)")
+end
+
 function M.make_position_param()
   local row, col = unpack(vim.api.nvim_win_get_cursor(0))
   local buf = vim.api.nvim_get_current_buf()
