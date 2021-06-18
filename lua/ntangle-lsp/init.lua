@@ -484,7 +484,7 @@ function M.hover()
         row = 1,
         col = 0,
         width = math.min(max_width, 100),
-        height = 20,
+        height = #lines,
         style = "minimal",
         border = "single",
       })

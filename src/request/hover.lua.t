@@ -35,7 +35,7 @@ local win_hover = vim.api.nvim_open_win(buf, false, {
   row = 1,
   col = 0,
   width = math.min(max_width, 100),
-  height = 20,
+  height = #lines,
   style = "minimal",
   border = "single",
 })

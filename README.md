@@ -1,5 +1,4 @@
-ntangle-lsp
-===========
+ntangle-lsp ===========
 
 LSP + Literate Programming([ntangle](https://github.com/jbyuki/ntangle.nvim)) Possible?
 
@@ -23,5 +22,12 @@ Config
 ------
 
 ```lua
-require"ntangle-lsp".setup()
+lua << EOF
+require"ntangle-lsp".setup {
+  mappings = {
+    ["K"] = require"ntangle-lsp".hover,
+    ["gd"] = require"ntangle-lsp".definition,
+  },
+}
+EOF
 ```
