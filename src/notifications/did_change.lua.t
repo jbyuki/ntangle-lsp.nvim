@@ -12,9 +12,9 @@ tick[fname] = version
 
 @implement+=
 function M.on_change(buf, fname, 
-    start_byte, old_byte, new_byte,
-    start_row, start_col,
-    old_row, old_end_col,
+    _, _, _,
+    start_row, _,
+    old_row, _,
     new_row, new_end_col, 
     lines)
   @get_client_rpc

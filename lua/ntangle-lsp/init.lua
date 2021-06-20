@@ -28,9 +28,9 @@ local signature_win
 
 local M = {}
 function M.on_change(buf, fname, 
-    start_byte, old_byte, new_byte,
-    start_row, start_col,
-    old_row, old_end_col,
+    _, _, _,
+    start_row, _,
+    old_row, _,
     new_row, new_end_col, 
     lines)
   local rpc = clients[buf]
@@ -132,7 +132,7 @@ function M.on_init(buf, filename, ft, lines)
 
   end
 
-  if not active_clients[ft] or not active_clients[ft][root] then
+  if not active_clients[ft] or not active_clients[ft][root_dir] then
     local dispatch = {}
     local handlers = {}
     skip_send = true
@@ -151,7 +151,7 @@ function M.on_init(buf, filename, ft, lines)
       return result
     end
 
-    handlers['window/workDoneProgress/create'] = function(params)
+    handlers['window/workDoneProgress/create'] = function()
       return vim.NIL
     end
 
@@ -175,8 +175,9 @@ function M.on_init(buf, filename, ft, lines)
         all_messages[fname] = messages
         for _, diag in ipairs(params.diagnostics) do
           local lnum_start = diag.range["start"].line+1
-          lnum_start = require"ntangle-ts".reverse_lookup(fname, lnum_start)
-          if lnum_start then
+          local lookup_buf
+          lnum_start, lookup_buf = require"ntangle-ts".reverse_lookup(fname, lnum_start)
+          if lnum_start and lookup_buf == buf then
             messages[lnum_start-1] = messages[lnum_start-1] or {}
             table.insert(messages[lnum_start-1], diag)
 
@@ -253,7 +254,7 @@ function M.on_init(buf, filename, ft, lines)
       }},
     }
 
-    rpc.request('initialize', initialize_params, function(init_err, result)
+    rpc.request('initialize', initialize_params, function(_, result)
       rpc.notify('initialized', {[vim.type_idx]=vim.types.dictionary})
 
       if config.settings then
@@ -373,7 +374,7 @@ function M.on_init(buf, filename, ft, lines)
 end
 
 function M.get_config(ft)
-  for client_name, config in pairs(configs) do
+  for _, config in pairs(configs) do
     if config.filetypes then
       for _, filetype_match in ipairs(config.filetypes) do
         if filetype_match == ft then

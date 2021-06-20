@@ -24,7 +24,7 @@ end
 local active_clients = {}
 
 @start_client_if_not_running+=
-if not active_clients[ft] or not active_clients[ft][root] then
+if not active_clients[ft] or not active_clients[ft][root_dir] then
   @start_client
 end
 
@@ -33,7 +33,7 @@ local configs = require("lspconfig/configs")
 
 @implement+=
 function M.get_config(ft)
-  for client_name, config in pairs(configs) do
+  for _, config in pairs(configs) do
     if config.filetypes then
       for _, filetype_match in ipairs(config.filetypes) do
         if filetype_match == ft then
@@ -153,7 +153,7 @@ local initialize_params = {
   }},
 }
 
-rpc.request('initialize', initialize_params, function(init_err, result)
+rpc.request('initialize', initialize_params, function(_, result)
   @send_initialized_notify
   @send_did_change_configurations
   @resolve_server_capabilities
@@ -207,7 +207,7 @@ handlers["workspace/configuration"] = function(params)
 end
 
 @lsp_handlers+=
-handlers['window/workDoneProgress/create'] = function(params)
+handlers['window/workDoneProgress/create'] = function()
   return vim.NIL
 end
 
