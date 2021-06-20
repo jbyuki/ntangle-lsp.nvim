@@ -32,7 +32,7 @@ function M.on_change(buf, fname,
 end
 
 @get_client_rpc+=
-local rpc = clients[buf]
+local rpc = clients[fname]
 
 @script_variables+=
 local changes = {}

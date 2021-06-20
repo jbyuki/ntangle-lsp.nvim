@@ -116,7 +116,6 @@ local active = sig.activeParameter
 if active and sig.parameters then
   active = math.max(active, 1)
   if sig.parameters[active] and sig.parameters[active].label then
-    print(vim.inspect(sig))
     local col = sig.parameters[active].label
     if type(col) == "string" then
       @find_columns_in_label

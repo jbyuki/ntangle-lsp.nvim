@@ -98,7 +98,7 @@ local clients = {}
 
 @register_client_for_filename+=
 local rpc = active_clients[ft][root_dir]
-clients[buf] = rpc
+clients[filename] = rpc
 
 @find_root_dir+=
 local root_dir = config.root_dir(filename)

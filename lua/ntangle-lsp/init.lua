@@ -23,6 +23,7 @@ local all_messages = {}
 
 local mappings = {}
 local mappings_lookup = {}
+local has_mappings = {}
 
 local signature_win
 
@@ -33,7 +34,7 @@ function M.on_change(buf, fname,
     old_row, _,
     new_row, new_end_col, 
     lines)
-  local rpc = clients[buf]
+  local rpc = clients[fname]
 
   if rpc then
     local did_change = function()
@@ -108,10 +109,13 @@ function M.on_init(buf, filename, ft, lines)
   -- local root_dir = config.get_root_dir(filename)
 
   attached[vim.uri_from_fname(filename)] = true
-  for i, map in ipairs(mappings_lookup) do
-    local lhs, rhs = unpack(map)
+  if not has_mappings[buf] then
+    for i, map in ipairs(mappings_lookup) do
+      local lhs, rhs = unpack(map)
 
-    vim.api.nvim_buf_set_keymap(buf, "n", lhs, [[<cmd>:lua require"ntangle-lsp".do_mapping(]] .. i .. [[)<CR>]], { noremap = true })
+      vim.api.nvim_buf_set_keymap(buf, "n", lhs, [[<cmd>:lua require"ntangle-lsp".do_mapping(]] .. i .. [[)<CR>]], { noremap = true })
+    end
+    has_mappings[buf] = true
   end
 
 
@@ -327,7 +331,6 @@ function M.on_init(buf, filename, ft, lines)
                     if active and sig.parameters then
                       active = math.max(active, 1)
                       if sig.parameters[active] and sig.parameters[active].label then
-                        print(vim.inspect(sig))
                         local col = sig.parameters[active].label
                         if type(col) == "string" then
                           col = { string.find(sig.label, col, 1, true) }
@@ -365,7 +368,7 @@ function M.on_init(buf, filename, ft, lines)
   end
 
   local rpc = active_clients[ft][root_dir]
-  clients[buf] = rpc
+  clients[filename] = rpc
 
 
   if not skip_send then
@@ -422,8 +425,11 @@ function M.do_mapping(id)
 end
 
 function M.definition()
+  local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
   local buf = vim.api.nvim_get_current_buf()
-  local rpc = clients[buf]
+  local _, _, fname = require"ntangle-ts".lookup(buf, row)
+
+  local rpc = clients[fname]
 
   M.send_pending()
 
@@ -459,8 +465,11 @@ function M.definition()
 end
 
 function M.hover()
+  local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
   local buf = vim.api.nvim_get_current_buf()
-  local rpc = clients[buf]
+  local _, _, fname = require"ntangle-ts".lookup(buf, row)
+
+  local rpc = clients[fname]
 
   M.send_pending()
 

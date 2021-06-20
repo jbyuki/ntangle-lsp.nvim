@@ -1,7 +1,7 @@
 ##../ntangle-lsp
 @implement+=
 function M.hover()
-  local buf = vim.api.nvim_get_current_buf()
+  @get_current_line_informations
   @get_client_rpc
   @send_pending_changes
   @make_position_params

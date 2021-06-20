@@ -2,6 +2,7 @@
 @script_variables+=
 local mappings = {}
 local mappings_lookup = {}
+local has_mappings = {}
 
 @save_mappings+=
 mappings = (opts and opts.mappings or {}) or {}
@@ -12,10 +13,13 @@ for lhs, rhs in pairs(mappings) do
 end
 
 @setup_mappings+=
-for i, map in ipairs(mappings_lookup) do
-  local lhs, rhs = unpack(map)
+if not has_mappings[buf] then
+  for i, map in ipairs(mappings_lookup) do
+    local lhs, rhs = unpack(map)
 
-  vim.api.nvim_buf_set_keymap(buf, "n", lhs, [[<cmd>:lua require"ntangle-lsp".do_mapping(]] .. i .. [[)<CR>]], { noremap = true })
+    vim.api.nvim_buf_set_keymap(buf, "n", lhs, [[<cmd>:lua require"ntangle-lsp".do_mapping(]] .. i .. [[)<CR>]], { noremap = true })
+  end
+  has_mappings[buf] = true
 end
 
 @implement+=
@@ -30,12 +34,17 @@ end
 
 @implement+=
 function M.definition()
-  local buf = vim.api.nvim_get_current_buf()
+  @get_current_line_informations
   @get_client_rpc
   @send_pending_changes
   @make_position_params
   @send_definition_request
 end
+
+@get_current_line_informations+=
+local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+local buf = vim.api.nvim_get_current_buf()
+local _, _, fname = require"ntangle-ts".lookup(buf, row)
 
 @send_definition_request+=
 rpc.request("textDocument/definition", params, function(_, result)
