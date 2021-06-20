@@ -15,11 +15,7 @@ local clients = {}
 
 local attached = {}
 
-local show_diags_cbs
-
-local diag_ns = {} 
-
-local all_messages = {}
+local diag_ns = {}
 
 local mappings = {}
 local mappings_lookup = {}
@@ -176,7 +172,6 @@ function M.on_init(buf, filename, ft, lines)
         fname = fname:gsub("\\", "/")
 
         local messages = {}
-        all_messages[fname] = messages
         for _, diag in ipairs(params.diagnostics) do
           local lnum_start = diag.range["start"].line+1
           local lookup_buf
@@ -269,7 +264,7 @@ function M.on_init(buf, filename, ft, lines)
 
       local resolved_capabilities = vim.lsp.protocol.resolve_capabilities(result.capabilities)
 
-      vim.api.nvim_buf_attach(0, true, { 
+      vim.api.nvim_buf_attach(0, true, {
         on_bytes = function(_, _, _, 
           start_row, start_col, start_byte,
           end_row, end_col, end_byte,
@@ -310,7 +305,7 @@ function M.on_init(buf, filename, ft, lines)
                   local sig = sigs[#sigs]
 
                   if sig then
-                    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+                    local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
                     local buf = vim.api.nvim_get_current_buf()
 
                     local buf = vim.api.nvim_create_buf(false, true)
@@ -510,7 +505,7 @@ function M.close_preview_autocmd(events, winnr)
 end
 
 function M.make_position_param()
-  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+  local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
   local buf = vim.api.nvim_get_current_buf()
 
   local lnum, prefix_len, filename = require"ntangle-ts".lookup(buf, row)

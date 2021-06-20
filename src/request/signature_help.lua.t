@@ -1,6 +1,6 @@
 ##../ntangle-lsp
 @attach_signature_help_callback+=
-vim.api.nvim_buf_attach(0, true, { 
+vim.api.nvim_buf_attach(0, true, {
   on_bytes = function(_, _, _, 
     start_row, start_col, start_byte,
     end_row, end_col, end_byte,
@@ -53,7 +53,7 @@ function M.make_position_param()
 end
 
 @get_window_cursor_position+=
-local row, col = unpack(vim.api.nvim_win_get_cursor(0))
+local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
 local buf = vim.api.nvim_get_current_buf()
 
 @convert_to_tangled_position+=

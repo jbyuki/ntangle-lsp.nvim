@@ -1,7 +1,4 @@
 ##../ntangle-lsp
-@script_variables+=
-local show_diags_cbs
-
 @lsp_handlers+=
 handlers["textDocument/publishDiagnostics"] = function(params)
   @postpone_if_insert_mode
@@ -15,7 +12,7 @@ handlers["textDocument/publishDiagnostics"] = function(params)
 end
 
 @script_variables+=
-local diag_ns = {} 
+local diag_ns = {}
 
 @create_diagnostics_namespace_if_none+=
 if not diag_ns[params.uri] then
@@ -32,7 +29,6 @@ fname = fname:gsub("\\", "/")
 
 @convert_tangled_lnums+=
 local messages = {}
-all_messages[fname] = messages
 for _, diag in ipairs(params.diagnostics) do
   local lnum_start = diag.range["start"].line+1
   local lookup_buf
@@ -41,9 +37,6 @@ for _, diag in ipairs(params.diagnostics) do
     @append_text_diagnostics
   end
 end
-
-@script_variables+=
-local all_messages = {}
 
 @append_text_diagnostics+=
 messages[lnum_start-1] = messages[lnum_start-1] or {}
