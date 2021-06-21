@@ -53,7 +53,7 @@ function M.make_position_param()
 end
 
 @get_window_cursor_position+=
-local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+local row, col = unpack(vim.api.nvim_win_get_cursor(0))
 local buf = vim.api.nvim_get_current_buf()
 
 @convert_to_tangled_position+=

@@ -305,7 +305,7 @@ function M.on_init(buf, filename, ft, lines)
                   local sig = sigs[#sigs]
 
                   if sig then
-                    local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+                    local row, col = unpack(vim.api.nvim_win_get_cursor(0))
                     local buf = vim.api.nvim_get_current_buf()
 
                     local buf = vim.api.nvim_create_buf(false, true)
@@ -505,7 +505,7 @@ function M.close_preview_autocmd(events, winnr)
 end
 
 function M.make_position_param()
-  local row, _ = unpack(vim.api.nvim_win_get_cursor(0))
+  local row, col = unpack(vim.api.nvim_win_get_cursor(0))
   local buf = vim.api.nvim_get_current_buf()
 
   local lnum, prefix_len, filename = require"ntangle-ts".lookup(buf, row)
