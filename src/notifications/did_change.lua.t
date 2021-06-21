@@ -49,6 +49,8 @@ end
 local changed_range
 if start_row >= lc then
   @append_newline_at_end_of_file
+elseif start_row+old_row >= lc then
+  @delete_line_at_eof
 else
   changed_range = {
     range = {
@@ -75,6 +77,22 @@ changed_range = {
     ["end"] = { line = start_row-1, character = col }
   },
   text = new_text,
+}
+
+@delete_line_at_eof+=
+local _, _, pline = require"ntangle-ts".reverse_lookup(fname, start_row)
+local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row+1)
+
+local pcol = vim.str_utfindex(pline)
+local col = vim.str_utfindex(line)
+
+changed_range = {
+  range = {
+    -- +1 is caused by the generated header
+    start = { line = start_row-1, character = pcol },
+    ["end"] = { line = start_row, character = col }
+  },
+  text = "",
 }
 
 @send_did_change+=

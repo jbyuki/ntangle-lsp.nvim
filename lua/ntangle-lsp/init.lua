@@ -184,6 +184,22 @@ function M.on_change(buf, fname,
         text = new_text,
       }
 
+    elseif start_row+old_row >= lc then
+      local _, _, pline = require"ntangle-ts".reverse_lookup(fname, start_row)
+      local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row+1)
+
+      local pcol = vim.str_utfindex(pline)
+      local col = vim.str_utfindex(line)
+
+      changed_range = {
+        range = {
+          -- +1 is caused by the generated header
+          start = { line = start_row-1, character = pcol },
+          ["end"] = { line = start_row, character = col }
+        },
+        text = "",
+      }
+
     else
       changed_range = {
         range = {
@@ -273,10 +289,6 @@ function M.on_init(buf, filename, ft, lines)
   local skip_send = false
   local did_open = function(rpc)
     lcount[filename] = #lines
-
-    if #lines == 1 and lines[1] == "" then
-      table.insert(lines, "")
-    end
 
     local params = {
       textDocument = {
