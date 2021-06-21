@@ -5,6 +5,8 @@ local changes = {}
 
 local changes_cbs = {}
 
+local lcount = {}
+
 local active_clients = {}
 
 local configs = require("lspconfig/configs")
@@ -12,6 +14,8 @@ local configs = require("lspconfig/configs")
 local lsp = vim.lsp
 
 local clients = {}
+
+local save_configs = {}
 
 local attached = {}
 
@@ -24,6 +28,111 @@ local has_mappings = {}
 local signature_win
 
 local M = {}
+local dispatch = {}
+local handlers = {}
+handlers["workspace/configuration"] = function(params)
+  local result = {}
+  for _, item in ipairs(params.items) do
+    if item.section then
+      local config
+      if item.scopeUri then
+        config = save_configs[item.scopeUri]
+      end
+
+      if config then
+        local value = (config.settings and M.lookup_section(config.settings, item.section)) or vim.NIL
+        -- For empty sections with no explicit '' key, return settings as is
+        if value == vim.NIL and item.section == '' then
+          value = config.settings or vim.NIL
+        end
+        table.insert(result, value)
+      end
+    end
+  end
+  return result
+end
+
+
+handlers['window/workDoneProgress/create'] = function()
+  return vim.NIL
+end
+
+handlers["textDocument/publishDiagnostics"] = function(params)
+  local buf = vim.api.nvim_get_current_buf()
+
+  local mode = vim.api.nvim_get_mode()
+  if mode.mode == "i" then
+    return
+  end
+  if attached[params.uri] then
+    if not diag_ns[params.uri] then
+      diag_ns[params.uri] = vim.api.nvim_create_namespace("")
+    end
+    local ns = diag_ns[params.uri]
+
+    vim.api.nvim_buf_clear_namespace(0, ns, 0, -1)
+
+    local fname = vim.uri_to_fname(params.uri)
+    fname = fname:gsub("\\", "/")
+
+    local messages = {}
+    for _, diag in ipairs(params.diagnostics) do
+      local lnum_start = diag.range["start"].line+1
+      local lookup_buf
+      lnum_start, lookup_buf = require"ntangle-ts".reverse_lookup(fname, lnum_start)
+      if lnum_start and lookup_buf == buf then
+        messages[lnum_start-1] = messages[lnum_start-1] or {}
+        table.insert(messages[lnum_start-1], diag)
+
+      end
+    end
+
+    local lcount = vim.api.nvim_buf_line_count(0)
+    for lnum, msgs in pairs(messages) do
+      local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
+      if lnum < lcount then
+        vim.api.nvim_buf_set_extmark(0, ns, lnum, 0, {
+          virt_text = chunk,
+        })
+      else
+        vim.api.nvim_buf_set_extmark(0, ns, lcount-1, 0, {
+          virt_text = chunk,
+        })
+      end
+    end
+
+  end
+end
+
+dispatch.notification = function(method, params)
+  local handler = handlers[method]
+  if handler then
+    return handler(params)
+  else
+    -- print(method, vim.inspect(params))
+  end
+
+end
+
+dispatch.server_request = function(method, params)
+  local handler = handlers[method]
+  if handler then
+    return handler(params)
+  else
+    -- print(method, vim.inspect(params))
+  end
+
+end
+
+dispatch.on_error = function(...)
+  print("on_error", vim.inspect({...}))
+end
+
+dispatch.on_exit = function(...)
+  print("on_exit", vim.inspect({...}))
+end
+
+
 function M.on_change(buf, fname, 
     _, _, _,
     start_row, _,
@@ -32,6 +141,7 @@ function M.on_change(buf, fname,
     lines)
   local rpc = clients[fname]
 
+  -- print(fname, start_row, old_row, new_row, vim.inspect(lines))
   if rpc then
     local did_change = function()
       local version = tick[fname]
@@ -53,24 +163,50 @@ function M.on_change(buf, fname,
 
     end
 
+    local lc = lcount[fname]
+
     local new_text = ""
     if new_row == 1 then
       new_text = lines[1] .. "\n"
     end
 
-    local changed_range = {
-      range = {
-        -- +1 is caused by the generated header
-        start = { line = start_row, character = 0},
-        ["end"] = { line = start_row+old_row, character = 0}
-      },
-      text = new_text,
-    }
+    local changed_range
+    if start_row >= lc then
+      local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row)
+      local col = vim.str_utfindex(line)
+
+      changed_range = {
+        range = {
+          -- +1 is caused by the generated header
+          start = { line = start_row-1, character = col },
+          ["end"] = { line = start_row-1, character = col }
+        },
+        text = new_text,
+      }
+
+    else
+      changed_range = {
+        range = {
+          -- +1 is caused by the generated header
+          start = { line = start_row, character = 0},
+          ["end"] = { line = start_row+old_row, character = 0}
+        },
+        text = new_text,
+      }
+    end
 
     changes[fname] = changes[fname] or {}
 
     table.insert(changes[fname], changed_range)
 
+    if lc then
+      if new_row == 1 then
+        lc = lc + 1
+      else
+        lc = lc - 1
+      end
+      lcount[fname] = lc
+    end
     local mode = vim.api.nvim_get_mode()
     if mode.mode ~= "i" then
       did_change()
@@ -98,13 +234,33 @@ function M.send_pending()
   end
   changes_cbs = {}
 end
+
+function M.on_deinit(buf, fname, ft)
+  local rpc = clients[fname]
+
+  if rpc then
+    local uri = vim.uri_from_fname(fname)
+    local params = {
+      textDocument = {
+        uri = uri,
+      },
+    }
+
+    print("did close " .. fname)
+    rpc.notify("textDocument/didClose", params)
+  end
+end
+
 function M.on_init(buf, filename, ft, lines)
   local config = M.get_config(ft)
+
+  save_configs[vim.uri_from_fname(filename)] = config
 
   local root_dir = config.root_dir(filename)
   -- local root_dir = config.get_root_dir(filename)
 
   attached[vim.uri_from_fname(filename)] = true
+
   if not has_mappings[buf] then
     for i, map in ipairs(mappings_lookup) do
       local lhs, rhs = unpack(map)
@@ -117,6 +273,8 @@ function M.on_init(buf, filename, ft, lines)
 
   local skip_send = false
   local did_open = function(rpc)
+    lcount[filename] = #lines
+
     local params = {
       textDocument = {
         version = 0,
@@ -126,6 +284,7 @@ function M.on_init(buf, filename, ft, lines)
       }
     }
 
+    print("did open " .. filename)
     rpc.notify('textDocument/didOpen', params)
 
     tick[filename] = 10
@@ -133,98 +292,7 @@ function M.on_init(buf, filename, ft, lines)
   end
 
   if not active_clients[ft] or not active_clients[ft][root_dir] then
-    local dispatch = {}
-    local handlers = {}
     skip_send = true
-    handlers["workspace/configuration"] = function(params)
-      local result = {}
-      for _, item in ipairs(params.items) do
-        if item.section then
-          local value = (config.settings and M.lookup_section(config.settings, item.section)) or vim.NIL
-          -- For empty sections with no explicit '' key, return settings as is
-          if value == vim.NIL and item.section == '' then
-            value = config.settings or vim.NIL
-          end
-          table.insert(result, value)
-        end
-      end
-      return result
-    end
-
-    handlers['window/workDoneProgress/create'] = function()
-      return vim.NIL
-    end
-
-    handlers["textDocument/publishDiagnostics"] = function(params)
-      local mode = vim.api.nvim_get_mode()
-      if mode.mode == "i" then
-        return
-      end
-      if attached[params.uri] then
-        if not diag_ns[params.uri] then
-          diag_ns[params.uri] = vim.api.nvim_create_namespace("")
-        end
-        local ns = diag_ns[params.uri]
-
-        vim.api.nvim_buf_clear_namespace(0, ns, 0, -1)
-
-        local fname = vim.uri_to_fname(params.uri)
-        fname = fname:gsub("\\", "/")
-
-        local messages = {}
-        for _, diag in ipairs(params.diagnostics) do
-          local lnum_start = diag.range["start"].line+1
-          local lookup_buf
-          lnum_start, lookup_buf = require"ntangle-ts".reverse_lookup(fname, lnum_start)
-          if lnum_start and lookup_buf == buf then
-            messages[lnum_start-1] = messages[lnum_start-1] or {}
-            table.insert(messages[lnum_start-1], diag)
-
-          end
-        end
-
-        local lcount = vim.api.nvim_buf_line_count(0)
-        for lnum, msgs in pairs(messages) do
-          local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
-          if lnum < lcount then
-            vim.api.nvim_buf_set_extmark(0, ns, lnum, 0, {
-              virt_text = chunk,
-            })
-          end
-        end
-
-      end
-    end
-
-    dispatch.notification = function(method, params)
-      local handler = handlers[method]
-      if handler then
-        return handler(params)
-      else
-        -- print(method, vim.inspect(params))
-      end
-
-    end
-
-    dispatch.server_request = function(method, params)
-      local handler = handlers[method]
-      if handler then
-        return handler(params)
-      else
-        -- print(method, vim.inspect(params))
-      end
-
-    end
-
-    dispatch.on_error = function(...)
-      print("on_error", vim.inspect({...}))
-    end
-
-    dispatch.on_exit = function(...)
-      print("on_exit", vim.inspect({...}))
-    end
-
-
     local cmd, cmd_args = lsp._cmd_parts(config.cmd)
 
     local rpc = lsp.rpc.start(cmd, cmd_args, dispatch, {
@@ -533,7 +601,11 @@ function M.setup(opts)
   local succ = pcall(require, "ntangle-ts")
   assert(succ, [[ntangle-ts is not installed ("require"ntangle-ts" returns false)!]])
 
-  require"ntangle-ts".register({ on_init = vim.schedule_wrap(M.on_init), on_change = M.on_change })
+  require"ntangle-ts".register({ 
+    on_init = vim.schedule_wrap(M.on_init), 
+    on_change = M.on_change,
+    on_deinit = vim.schedule_wrap(M.on_deinit), 
+  })
   vim.api.nvim_command [[augroup ntanglelsp]]
   vim.api.nvim_command [[autocmd!]]
 

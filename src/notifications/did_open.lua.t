@@ -1,13 +1,16 @@
 ##../ntangle-lsp
 @implement+=
 function M.on_init(buf, filename, ft, lines)
+  @send_pending
   @get_client_config_from_lsp_config
+  @save_config_for_filename
   @find_root_dir
   @set_as_attached
   @setup_mappings
 
   local skip_send = false
   local did_open = function(rpc)
+    @save_line_count
     @send_did_open_notification
     @init_document_version
   end
@@ -67,11 +70,7 @@ end
 local config = M.get_config(ft)
 
 @start_client+=
-local dispatch = {}
-local handlers = {}
 skip_send = true
-@lsp_handlers
-@dispatch_functions
 @split_cmds_list
 @start_client_through_lsp_rpc
 @register_client_for_filetype
@@ -114,6 +113,7 @@ local params = {
   }
 }
 
+print("did open " .. filename)
 rpc.notify('textDocument/didOpen', params)
 
 @dispatch_functions+=
@@ -190,21 +190,37 @@ function M.lookup_section(settings, section)
   return settings
 end
 
+@script_variables+=
+local save_configs = {}
+
+@save_config_for_filename+=
+save_configs[vim.uri_from_fname(filename)] = config
+
+@get_config_from_scopeuri+=
+local config
+if item.scopeUri then
+  config = save_configs[item.scopeUri]
+end
+
 @lsp_handlers+=
 handlers["workspace/configuration"] = function(params)
   local result = {}
   for _, item in ipairs(params.items) do
     if item.section then
-      local value = (config.settings and M.lookup_section(config.settings, item.section)) or vim.NIL
-      -- For empty sections with no explicit '' key, return settings as is
-      if value == vim.NIL and item.section == '' then
-        value = config.settings or vim.NIL
+      @get_config_from_scopeuri
+      if config then
+        local value = (config.settings and M.lookup_section(config.settings, item.section)) or vim.NIL
+        -- For empty sections with no explicit '' key, return settings as is
+        if value == vim.NIL and item.section == '' then
+          value = config.settings or vim.NIL
+        end
+        table.insert(result, value)
       end
-      table.insert(result, value)
     end
   end
   return result
 end
+
 
 @lsp_handlers+=
 handlers['window/workDoneProgress/create'] = function()
@@ -219,3 +235,4 @@ local attached = {}
 
 @set_as_attached+=
 attached[vim.uri_from_fname(filename)] = true
+

@@ -1,6 +1,7 @@
 ##../ntangle-lsp
 @lsp_handlers+=
 handlers["textDocument/publishDiagnostics"] = function(params)
+  @get_current_buf
   @postpone_if_insert_mode
   if attached[params.uri] then
     @create_diagnostics_namespace_if_none
@@ -10,6 +11,9 @@ handlers["textDocument/publishDiagnostics"] = function(params)
     @display_virtual_text_diagnostics
   end
 end
+
+@get_current_buf+=
+local buf = vim.api.nvim_get_current_buf()
 
 @script_variables+=
 local diag_ns = {}
@@ -48,6 +52,10 @@ for lnum, msgs in pairs(messages) do
   local chunk = vim.lsp.diagnostic.get_virtual_text_chunks_for_line(0, lnum, msgs, {})
   if lnum < lcount then
     vim.api.nvim_buf_set_extmark(0, ns, lnum, 0, {
+      virt_text = chunk,
+    })
+  else
+    vim.api.nvim_buf_set_extmark(0, ns, lcount-1, 0, {
       virt_text = chunk,
     })
   end

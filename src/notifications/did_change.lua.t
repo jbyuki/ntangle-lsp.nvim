@@ -18,6 +18,7 @@ function M.on_change(buf, fname,
     new_row, new_end_col, 
     lines)
   @get_client_rpc
+  -- print(fname, start_row, old_row, new_row, vim.inspect(lines))
   if rpc then
     local did_change = function()
       @increment_document_version
@@ -25,7 +26,9 @@ function M.on_change(buf, fname,
       @reset_changes
     end
 
+    @get_linecount_fname
     @append_changes
+    @change_lcount
     @if_not_insert_mode_send_immediatly
     @add_callback_if_not_added
   end
@@ -43,18 +46,36 @@ if new_row == 1 then
   new_text = lines[1] .. "\n"
 end
 
-local changed_range = {
-  range = {
-    -- +1 is caused by the generated header
-    start = { line = start_row, character = 0},
-    ["end"] = { line = start_row+old_row, character = 0}
-  },
-  text = new_text,
-}
+local changed_range
+if start_row >= lc then
+  @append_newline_at_end_of_file
+else
+  changed_range = {
+    range = {
+      -- +1 is caused by the generated header
+      start = { line = start_row, character = 0},
+      ["end"] = { line = start_row+old_row, character = 0}
+    },
+    text = new_text,
+  }
+end
 
 changes[fname] = changes[fname] or {}
 
 table.insert(changes[fname], changed_range)
+
+@append_newline_at_end_of_file+=
+local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row)
+local col = vim.str_utfindex(line)
+
+changed_range = {
+  range = {
+    -- +1 is caused by the generated header
+    start = { line = start_row-1, character = col },
+    ["end"] = { line = start_row-1, character = col }
+  },
+  text = new_text,
+}
 
 @send_did_change+=
 local uri = vim.uri_from_fname(fname)
@@ -107,4 +128,23 @@ function M.send_pending()
     cbs()
   end
   changes_cbs = {}
+end
+
+@script_variables+=
+local lcount = {}
+
+@save_line_count+=
+lcount[filename] = #lines
+
+@get_linecount_fname+=
+local lc = lcount[fname]
+
+@change_lcount+=
+if lc then
+  if new_row == 1 then
+    lc = lc + 1
+  else
+    lc = lc - 1
+  end
+  lcount[fname] = lc
 end

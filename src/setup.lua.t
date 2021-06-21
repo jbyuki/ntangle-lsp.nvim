@@ -14,4 +14,8 @@ local succ = pcall(require, "ntangle-ts")
 assert(succ, [[ntangle-ts is not installed ("require"ntangle-ts" returns false)!]])
 
 @setup_ntangle_ts_callback+=
-require"ntangle-ts".register({ on_init = vim.schedule_wrap(M.on_init), on_change = M.on_change })
+require"ntangle-ts".register({ 
+  on_init = vim.schedule_wrap(M.on_init), 
+  on_change = M.on_change,
+  on_deinit = vim.schedule_wrap(M.on_deinit), 
+})
