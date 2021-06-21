@@ -246,7 +246,6 @@ function M.on_deinit(buf, fname, ft)
       },
     }
 
-    print("did close " .. fname)
     rpc.notify("textDocument/didClose", params)
   end
 end
@@ -275,6 +274,10 @@ function M.on_init(buf, filename, ft, lines)
   local did_open = function(rpc)
     lcount[filename] = #lines
 
+    if #lines == 1 and lines[1] == "" then
+      table.insert(lines, "")
+    end
+
     local params = {
       textDocument = {
         version = 0,
@@ -284,7 +287,6 @@ function M.on_init(buf, filename, ft, lines)
       }
     }
 
-    print("did open " .. filename)
     rpc.notify('textDocument/didOpen', params)
 
     tick[filename] = 10

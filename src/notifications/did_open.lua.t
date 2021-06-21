@@ -11,6 +11,7 @@ function M.on_init(buf, filename, ft, lines)
   local skip_send = false
   local did_open = function(rpc)
     @save_line_count
+    @if_empty_append_line
     @send_did_open_notification
     @init_document_version
   end
@@ -103,6 +104,11 @@ clients[filename] = rpc
 local root_dir = config.root_dir(filename)
 -- local root_dir = config.get_root_dir(filename)
 
+@if_empty_append_line+=
+if #lines == 1 and lines[1] == "" then
+  table.insert(lines, "")
+end
+
 @send_did_open_notification+=
 local params = {
   textDocument = {
@@ -113,7 +119,6 @@ local params = {
   }
 }
 
-print("did open " .. filename)
 rpc.notify('textDocument/didOpen', params)
 
 @dispatch_functions+=

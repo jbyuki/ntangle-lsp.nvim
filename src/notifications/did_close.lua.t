@@ -15,5 +15,4 @@ local params = {
   },
 }
 
-print("did close " .. fname)
 rpc.notify("textDocument/didClose", params)
