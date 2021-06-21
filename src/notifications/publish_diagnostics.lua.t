@@ -36,6 +36,10 @@ local messages = {}
 for _, diag in ipairs(params.diagnostics) do
   local lnum_start = diag.range["start"].line+1
   local lookup_buf
+  local lc = lcount[fname]
+  if lc then
+    lnum_start = math.min(lc, lnum_start)
+  end
   lnum_start, lookup_buf = require"ntangle-ts".reverse_lookup(fname, lnum_start)
   if lnum_start and lookup_buf == buf then
     @append_text_diagnostics

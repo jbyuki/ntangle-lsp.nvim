@@ -48,9 +48,13 @@ end
 
 local changed_range
 if start_row >= lc then
-  @append_newline_at_end_of_file
-elseif start_row+old_row >= lc then
-  @delete_line_at_eof
+  if start_row == 0 then
+    @append_newline_firstline
+  else
+    @append_newline_at_end_of_file
+  end
+elseif new_row == 0 then
+  @delete_line_change
 else
   changed_range = {
     range = {
@@ -64,7 +68,20 @@ end
 
 changes[fname] = changes[fname] or {}
 
-table.insert(changes[fname], changed_range)
+if changed_range then
+  table.insert(changes[fname], changed_range)
+end
+
+@append_newline_firstline+=
+changed_range = {
+  range = {
+    -- +1 is caused by the generated header
+    start = { line = 0, character = 0 },
+    ["end"] = { line = 0, character = 0 }
+  },
+  text = new_text,
+}
+
 
 @append_newline_at_end_of_file+=
 local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row)
@@ -79,7 +96,7 @@ changed_range = {
   text = new_text,
 }
 
-@delete_line_at_eof+=
+@delete_line_change+=
 local _, _, pline = require"ntangle-ts".reverse_lookup(fname, start_row)
 local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row+1)
 

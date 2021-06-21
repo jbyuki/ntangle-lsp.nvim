@@ -79,6 +79,10 @@ handlers["textDocument/publishDiagnostics"] = function(params)
     for _, diag in ipairs(params.diagnostics) do
       local lnum_start = diag.range["start"].line+1
       local lookup_buf
+      local lc = lcount[fname]
+      if lc then
+        lnum_start = math.min(lc, lnum_start)
+      end
       lnum_start, lookup_buf = require"ntangle-ts".reverse_lookup(fname, lnum_start)
       if lnum_start and lookup_buf == buf then
         messages[lnum_start-1] = messages[lnum_start-1] or {}
@@ -172,19 +176,32 @@ function M.on_change(buf, fname,
 
     local changed_range
     if start_row >= lc then
-      local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row)
-      local col = vim.str_utfindex(line)
+      if start_row == 0 then
+        changed_range = {
+          range = {
+            -- +1 is caused by the generated header
+            start = { line = 0, character = 0 },
+            ["end"] = { line = 0, character = 0 }
+          },
+          text = new_text,
+        }
 
-      changed_range = {
-        range = {
-          -- +1 is caused by the generated header
-          start = { line = start_row-1, character = col },
-          ["end"] = { line = start_row-1, character = col }
-        },
-        text = new_text,
-      }
 
-    elseif start_row+old_row >= lc then
+      else
+        local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row)
+        local col = vim.str_utfindex(line)
+
+        changed_range = {
+          range = {
+            -- +1 is caused by the generated header
+            start = { line = start_row-1, character = col },
+            ["end"] = { line = start_row-1, character = col }
+          },
+          text = new_text,
+        }
+
+      end
+    elseif new_row == 0 then
       local _, _, pline = require"ntangle-ts".reverse_lookup(fname, start_row)
       local _, _, line = require"ntangle-ts".reverse_lookup(fname, start_row+1)
 
@@ -213,7 +230,9 @@ function M.on_change(buf, fname,
 
     changes[fname] = changes[fname] or {}
 
-    table.insert(changes[fname], changed_range)
+    if changed_range then
+      table.insert(changes[fname], changed_range)
+    end
 
     if lc then
       if new_row == 1 then
